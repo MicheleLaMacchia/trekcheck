@@ -40,17 +40,13 @@ jobs:
 
       - name: Accept Android SDK licenses and install packages
         run: |
-          python3 - <<'PY'
-          import subprocess
-          import sys
-
-          result = subprocess.run(
-              ["sdkmanager", "--licenses"],
-              input=("y\n" * 100).encode(),
-              check=False,
-          )
-          sys.exit(result.returncode)
-          PY
+          set +e
+          yes | sdkmanager --licenses
+          license_status=${PIPESTATUS[1]}
+          set -e
+          if [ "$license_status" -ne 0 ]; then
+            exit "$license_status"
+          fi
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-36" \
