@@ -34,16 +34,23 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: false
+          packages: ''
 
-      - name: Install Android SDK packages
+      - name: Accept Android SDK licenses and install packages
         run: |
-          set +e
-          yes | sdkmanager --licenses
-          license_status=${PIPESTATUS[1]}
-          set -e
-          if [ "$license_status" -ne 0 ]; then
-            exit "$license_status"
-          fi
+          python3 - <<'PY'
+          import subprocess
+          import sys
+
+          result = subprocess.run(
+              ["sdkmanager", "--licenses"],
+              input=("y\n" * 100).encode(),
+              check=False,
+          )
+          sys.exit(result.returncode)
+          PY
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-36" \
