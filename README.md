@@ -3,7 +3,7 @@ applicazione per la gestione dei trekking
 
 ## Sviluppo Android
 
-Il progetto usa Kotlin 2.2.20, Android Gradle Plugin 8.13.2, Gradle 8.13 tramite Wrapper e Jetpack Compose con BOM 2025.10.00. Compila con Android API 36 e Build Tools 36.0.0.
+Il progetto usa Kotlin 2.2.20, Android Gradle Plugin 8.13.2, Gradle 8.13 tramite Wrapper e Jetpack Compose con BOM 2025.10.00. Compila e targetizza Android API 37 con Build Tools 37.0.0.
 
 In Codex Cloud inizializza il terminale con l'ambiente predisposto:
 
@@ -13,7 +13,7 @@ export ANDROID_HOME=/workspace/.android-sdk
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export ANDROID_USER_HOME=/workspace/.android-user
 export GRADLE_USER_HOME=/workspace/.gradle-user
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/36.0.0:$PATH"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/37.0.0:$PATH"
 
 proxy_url="${HTTPS_PROXY:-${https_proxy:-}}"
 if [ -n "$proxy_url" ]; then
