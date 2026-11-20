@@ -3,7 +3,7 @@ applicazione per la gestione dei trekking
 
 ## Sviluppo Android
 
-Il progetto usa Kotlin 2.2.20, Android Gradle Plugin 8.13.2, Gradle 8.13 tramite Wrapper e Jetpack Compose con BOM 2025.10.00. Compila e targetizza Android API 37 con Build Tools 37.0.0.
+Il progetto usa Kotlin 2.2.20, Android Gradle Plugin 8.13.2, Gradle 8.14.7 tramite Wrapper e Jetpack Compose con BOM 2025.10.00. Compila e targetizza Android API 37 con Build Tools 37.0.0.
 
 In Codex Cloud inizializza il terminale con l'ambiente predisposto:
 
