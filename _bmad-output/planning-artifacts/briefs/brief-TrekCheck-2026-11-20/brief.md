@@ -1,6 +1,6 @@
 ---
 title: TrekCheck — Brief di prodotto MVP Free
-status: draft
+status: approved
 created: 2026-11-20
 updated: 2026-11-20
 ---
