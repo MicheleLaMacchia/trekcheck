@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -27,9 +28,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -39,8 +43,10 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import it.trekcheck.app.R
+import it.trekcheck.app.domain.model.ImportErrorCode
 import it.trekcheck.app.domain.model.SavedPlanDataAvailability
 import it.trekcheck.app.domain.model.SavedPlanSummary
+import it.trekcheck.app.ui.components.PrimaryActionState
 import it.trekcheck.app.ui.components.TrekCheckPrimaryAction
 import it.trekcheck.app.ui.theme.TrekCheckTheme
 import java.util.Locale
@@ -58,6 +64,13 @@ fun HomeScreen(
     } else {
         Locale.getDefault()
     }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(uiState.activeNotice) {
+        if (uiState.activeNotice != null) {
+            listState.scrollToItem(1)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -71,6 +84,7 @@ fun HomeScreen(
             contentAlignment = Alignment.TopCenter,
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .widthIn(max = 600.dp)
                     .fillMaxWidth(),
@@ -88,6 +102,8 @@ fun HomeScreen(
                     item(key = "notice") {
                         HomeNoticeCard(
                             notice = uiState.activeNotice,
+                            canChooseAnotherFile = uiState.importActionState == PrimaryActionState.Enabled,
+                            onChooseAnotherFile = { onEvent(HomeEvent.ChooseAnotherFileClicked) },
                             onDismiss = { onEvent(HomeEvent.DismissNotice) },
                         )
                     }
@@ -188,72 +204,196 @@ private fun LocalModeStatusBadge(isOffline: Boolean) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HomeNoticeCard(
     notice: HomeNotice,
+    canChooseAnotherFile: Boolean,
+    onChooseAnotherFile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val spacing = TrekCheckTheme.spacing
     val extendedColors = TrekCheckTheme.extendedColors
 
-    when (notice) {
-        HomeNotice.ImportComingSoon -> {
-            val dismissContentDescription = stringResource(R.string.home_notice_import_dismiss_cd)
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-                shape = MaterialTheme.shapes.small,
-                color = extendedColors.warningContainer,
-                border = BorderStroke(1.dp, extendedColors.warning),
+    val spec: NoticeDisplaySpec = when (notice) {
+        is HomeNotice.ImportSucceeded -> resolveSuccessNoticeSpec(notice, extendedColors)
+        is HomeNotice.ImportFailed -> resolveErrorNoticeSpec(notice.errorCode)
+    }
+
+    val dismissContentDescription = stringResource(R.string.home_notice_dismiss_cd, spec.title)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        shape = MaterialTheme.shapes.small,
+        color = spec.containerColor,
+        border = BorderStroke(1.dp, spec.borderColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(spacing.space4),
+            verticalArrangement = Arrangement.spacedBy(spacing.space2),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.space2),
             ) {
-                Column(
-                    modifier = Modifier.padding(spacing.space4),
-                    verticalArrangement = Arrangement.spacedBy(spacing.space2),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(spacing.space2),
+                Icon(
+                    painter = painterResource(spec.iconRes),
+                    contentDescription = null,
+                    tint = spec.contentColor,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .testTag(spec.iconTag),
+                )
+                Text(
+                    text = spec.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = spec.contentColor,
+                )
+            }
+            Text(
+                text = spec.body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = spec.contentColor,
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.space2, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(spacing.space1),
+            ) {
+                if (spec.showChooseAnotherFile) {
+                    TextButton(
+                        onClick = onChooseAnotherFile,
+                        enabled = canChooseAnotherFile,
+                        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_info_notice),
-                            contentDescription = null,
-                            tint = extendedColors.onWarningContainer,
-                            modifier = Modifier.size(20.dp),
-                        )
                         Text(
-                            text = stringResource(R.string.home_notice_import_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = extendedColors.onWarningContainer,
+                            text = stringResource(R.string.home_notice_choose_another_file),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = spec.contentColor,
                         )
                     }
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                        .semantics { contentDescription = dismissContentDescription },
+                ) {
                     Text(
-                        text = stringResource(R.string.home_notice_import_body),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = extendedColors.onWarningContainer,
+                        text = stringResource(R.string.home_notice_dismiss),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = spec.contentColor,
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                .semantics { contentDescription = dismissContentDescription },
-                        ) {
-                            Text(
-                                text = stringResource(R.string.home_notice_dismiss),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = extendedColors.onWarningContainer,
-                            )
-                        }
-                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun resolveSuccessNoticeSpec(
+    notice: HomeNotice.ImportSucceeded,
+    extendedColors: it.trekcheck.app.ui.theme.TrekCheckExtendedColors,
+): NoticeDisplaySpec {
+    return when {
+        notice.hasElevation && notice.hasTimestamps -> NoticeDisplaySpec(
+            title = stringResource(R.string.home_notice_import_success_title),
+            body = stringResource(R.string.home_notice_import_success_body, notice.planTitle),
+            iconRes = R.drawable.ic_route_trail,
+            iconTag = "home_notice_icon_route",
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            borderColor = MaterialTheme.colorScheme.primary,
+            showChooseAnotherFile = false,
+        )
+
+        !notice.hasElevation && !notice.hasTimestamps -> NoticeDisplaySpec(
+            title = stringResource(R.string.home_notice_import_missing_both_title),
+            body = stringResource(R.string.home_notice_import_missing_both_body, notice.planTitle),
+            iconRes = R.drawable.ic_info_notice,
+            iconTag = "home_notice_icon_info",
+            containerColor = extendedColors.warningContainer,
+            contentColor = extendedColors.onWarningContainer,
+            borderColor = extendedColors.warning,
+            showChooseAnotherFile = false,
+        )
+
+        !notice.hasElevation -> NoticeDisplaySpec(
+            title = stringResource(R.string.home_notice_import_missing_elevation_title),
+            body = stringResource(R.string.home_notice_import_missing_elevation_body, notice.planTitle),
+            iconRes = R.drawable.ic_info_notice,
+            iconTag = "home_notice_icon_info",
+            containerColor = extendedColors.warningContainer,
+            contentColor = extendedColors.onWarningContainer,
+            borderColor = extendedColors.warning,
+            showChooseAnotherFile = false,
+        )
+
+        else -> NoticeDisplaySpec(
+            title = stringResource(R.string.home_notice_import_missing_timestamps_title),
+            body = stringResource(R.string.home_notice_import_missing_timestamps_body, notice.planTitle),
+            iconRes = R.drawable.ic_info_notice,
+            iconTag = "home_notice_icon_info",
+            containerColor = extendedColors.warningContainer,
+            contentColor = extendedColors.onWarningContainer,
+            borderColor = extendedColors.warning,
+            showChooseAnotherFile = false,
+        )
+    }
+}
+
+@Composable
+private fun resolveErrorNoticeSpec(errorCode: ImportErrorCode): NoticeDisplaySpec {
+    val (titleRes, bodyRes) = when (errorCode) {
+        ImportErrorCode.READ_FAILED ->
+            R.string.home_error_read_failed_title to R.string.home_error_read_failed_body
+
+        ImportErrorCode.FILE_TOO_LARGE ->
+            R.string.home_error_file_too_large_title to R.string.home_error_file_too_large_body
+
+        ImportErrorCode.UNSAFE_XML ->
+            R.string.home_error_disallowed_xml_title to R.string.home_error_disallowed_xml_body
+
+        ImportErrorCode.MALFORMED_XML ->
+            R.string.home_error_malformed_xml_title to R.string.home_error_malformed_xml_body
+
+        ImportErrorCode.INVALID_COORDINATES ->
+            R.string.home_error_invalid_coordinates_title to R.string.home_error_invalid_coordinates_body
+
+        ImportErrorCode.INSUFFICIENT_POINTS ->
+            R.string.home_error_insufficient_points_title to R.string.home_error_insufficient_points_body
+
+        ImportErrorCode.TOO_MANY_POINTS ->
+            R.string.home_error_too_many_points_title to R.string.home_error_too_many_points_body
+
+        ImportErrorCode.STORAGE_FAILED ->
+            R.string.home_error_storage_failed_title to R.string.home_error_storage_failed_body
+    }
+
+    return NoticeDisplaySpec(
+        title = stringResource(titleRes),
+        body = stringResource(bodyRes),
+        iconRes = R.drawable.ic_error_notice,
+        iconTag = "home_notice_icon_error",
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        borderColor = MaterialTheme.colorScheme.error,
+        showChooseAnotherFile = true,
+    )
+}
+
+private data class NoticeDisplaySpec(
+    val title: String,
+    val body: String,
+    val iconRes: Int,
+    val iconTag: String,
+    val containerColor: Color,
+    val contentColor: Color,
+    val borderColor: Color,
+    val showChooseAnotherFile: Boolean,
+)
 
 @Composable
 private fun EmptyLocalPlansCard() {

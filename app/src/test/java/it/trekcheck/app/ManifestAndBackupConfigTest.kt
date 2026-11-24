@@ -31,6 +31,52 @@ class ManifestAndBackupConfigTest {
         assertEquals("false", application.getAttributeNS(androidNs, "allowBackup"))
         assertEquals("@xml/backup_rules", application.getAttributeNS(androidNs, "fullBackupContent"))
         assertEquals("@xml/data_extraction_rules", application.getAttributeNS(androidNs, "dataExtractionRules"))
+
+        val activities = document.getElementsByTagName("activity")
+        assertEquals(1, activities.length)
+        val mainActivity = activities.item(0) as Element
+        assertEquals(".MainActivity", mainActivity.getAttributeNS(androidNs, "name"))
+        assertEquals("true", mainActivity.getAttributeNS(androidNs, "exported"))
+        assertEquals("singleTop", mainActivity.getAttributeNS(androidNs, "launchMode"))
+
+        val intentFilters = mainActivity.getElementsByTagName("intent-filter")
+        val actions = mutableListOf<String>()
+        val viewMimeTypes = mutableSetOf<String>()
+        val viewPathPatterns = mutableSetOf<String>()
+        val sendMimeTypes = mutableSetOf<String>()
+
+        for (i in 0 until intentFilters.length) {
+            val filter = intentFilters.item(i) as Element
+            val filterActions = filter.getElementsByTagName("action")
+            val filterActionNames = (0 until filterActions.length).map { idx ->
+                (filterActions.item(idx) as Element).getAttributeNS(androidNs, "name")
+            }
+            actions += filterActionNames
+
+            val dataNodes = filter.getElementsByTagName("data")
+            for (d in 0 until dataNodes.length) {
+                val dataEl = dataNodes.item(d) as Element
+                val mime = dataEl.getAttributeNS(androidNs, "mimeType")
+                val pattern = dataEl.getAttributeNS(androidNs, "pathPattern")
+                if ("android.intent.action.VIEW" in filterActionNames) {
+                    if (mime.isNotEmpty()) viewMimeTypes += mime
+                    if (pattern.isNotEmpty()) viewPathPatterns += pattern
+                }
+                if ("android.intent.action.SEND" in filterActionNames) {
+                    if (mime.isNotEmpty()) sendMimeTypes += mime
+                }
+            }
+        }
+
+        assertTrue(actions.contains("android.intent.action.MAIN"))
+        assertTrue(actions.contains("android.intent.action.VIEW"))
+        assertTrue(actions.contains("android.intent.action.SEND"))
+        assertTrue(viewMimeTypes.contains("application/gpx+xml"))
+        assertTrue(viewMimeTypes.contains("text/plain"))
+        assertTrue(viewPathPatterns.any { it.endsWith(".gpx") })
+        assertTrue(viewPathPatterns.any { it.endsWith(".Gpx") })
+        assertTrue(viewPathPatterns.contains(".*\\\\..*\\\\..*\\\\..*\\\\.gpx"))
+        assertTrue(sendMimeTypes.contains("application/gpx+xml"))
     }
 
     @Test

@@ -1,0 +1,199 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "4fa7c2f9c8ac7b7a56c366d493181676",
+    "entities": [
+      {
+        "tableName": "route_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `distanceMeters` REAL NOT NULL, `elevationGainMeters` REAL, `elevationLossMeters` REAL, `minElevationMeters` REAL, `maxElevationMeters` REAL, `startLatitude` REAL NOT NULL, `startLongitude` REAL NOT NULL, `endLatitude` REAL NOT NULL, `endLongitude` REAL NOT NULL, `minLatitude` REAL NOT NULL, `maxLatitude` REAL NOT NULL, `minLongitude` REAL NOT NULL, `maxLongitude` REAL NOT NULL, `pointCount` INTEGER NOT NULL, `segmentCount` INTEGER NOT NULL, `hasElevation` INTEGER NOT NULL, `hasTimestamps` INTEGER NOT NULL, `departureInstantUtcEpochMillis` INTEGER, `routeZoneId` TEXT NOT NULL, `estimatedDurationSeconds` INTEGER, `updatedAtUtcEpochMillis` INTEGER NOT NULL, `dataAvailability` TEXT NOT NULL, `gpxFileName` TEXT NOT NULL, `gpxVersion` INTEGER NOT NULL, `geometryFileName` TEXT NOT NULL, `geometryVersion` INTEGER NOT NULL, `gpxByteCount` INTEGER NOT NULL, `planVersion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceMeters",
+            "columnName": "distanceMeters",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "elevationGainMeters",
+            "columnName": "elevationGainMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "elevationLossMeters",
+            "columnName": "elevationLossMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "minElevationMeters",
+            "columnName": "minElevationMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "maxElevationMeters",
+            "columnName": "maxElevationMeters",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "startLatitude",
+            "columnName": "startLatitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startLongitude",
+            "columnName": "startLongitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endLatitude",
+            "columnName": "endLatitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endLongitude",
+            "columnName": "endLongitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minLatitude",
+            "columnName": "minLatitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxLatitude",
+            "columnName": "maxLatitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minLongitude",
+            "columnName": "minLongitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxLongitude",
+            "columnName": "maxLongitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pointCount",
+            "columnName": "pointCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "segmentCount",
+            "columnName": "segmentCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasElevation",
+            "columnName": "hasElevation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasTimestamps",
+            "columnName": "hasTimestamps",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "departureInstantUtcEpochMillis",
+            "columnName": "departureInstantUtcEpochMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "routeZoneId",
+            "columnName": "routeZoneId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estimatedDurationSeconds",
+            "columnName": "estimatedDurationSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAtUtcEpochMillis",
+            "columnName": "updatedAtUtcEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataAvailability",
+            "columnName": "dataAvailability",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gpxFileName",
+            "columnName": "gpxFileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gpxVersion",
+            "columnName": "gpxVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "geometryFileName",
+            "columnName": "geometryFileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "geometryVersion",
+            "columnName": "geometryVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gpxByteCount",
+            "columnName": "gpxByteCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planVersion",
+            "columnName": "planVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4fa7c2f9c8ac7b7a56c366d493181676')"
+    ]
+  }
+}

@@ -1,10 +1,23 @@
 package it.trekcheck.app.ui.home
 
+import it.trekcheck.app.domain.model.ImportErrorCode
 import it.trekcheck.app.domain.model.SavedPlanSummary
 import it.trekcheck.app.ui.components.PrimaryActionState
 
-enum class HomeNotice {
-    ImportComingSoon,
+sealed interface HomeNotice {
+    data class ImportSucceeded(
+        val planTitle: String,
+        val hasElevation: Boolean,
+        val hasTimestamps: Boolean,
+    ) : HomeNotice
+
+    data class ImportFailed(
+        val errorCode: ImportErrorCode,
+    ) : HomeNotice
+}
+
+sealed interface HomeEffect {
+    data object LaunchGpxPicker : HomeEffect
 }
 
 data class HomeUiState(
@@ -19,5 +32,6 @@ data class HomeUiState(
 
 sealed interface HomeEvent {
     data object ImportGpxClicked : HomeEvent
+    data object ChooseAnotherFileClicked : HomeEvent
     data object DismissNotice : HomeEvent
 }

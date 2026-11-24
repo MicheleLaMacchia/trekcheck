@@ -170,5 +170,50 @@ class SavedPlanSummaryTest {
                 updatedAtUtc = sampleInstant,
             )
         }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            SavedPlanSummary(
+                id = "plan-7",
+                title = "Sentiero incoerente",
+                distanceMeters = 1000.0,
+                elevationGainMeters = 150.0,
+                departureInstantUtc = null,
+                routeZoneId = sampleZone,
+                estimatedDurationSeconds = null,
+                updatedAtUtc = sampleInstant,
+                hasElevation = false,
+            )
+        }
+    }
+
+    @Test
+    fun derivesAndPreservesExplicitElevationAndTimestampFlags() {
+        val withElevationOnly = SavedPlanSummary(
+            id = "plan-ele",
+            title = "Sentiero con quota",
+            distanceMeters = 2_000.0,
+            elevationGainMeters = 120.0,
+            departureInstantUtc = null,
+            routeZoneId = sampleZone,
+            estimatedDurationSeconds = null,
+            updatedAtUtc = sampleInstant,
+        )
+        assertEquals(true, withElevationOnly.hasElevation)
+        assertEquals(false, withElevationOnly.hasTimestamps)
+
+        val withTimestampsOnly = SavedPlanSummary(
+            id = "plan-time",
+            title = "Sentiero senza quota",
+            distanceMeters = 2_000.0,
+            elevationGainMeters = null,
+            departureInstantUtc = null,
+            routeZoneId = sampleZone,
+            estimatedDurationSeconds = null,
+            updatedAtUtc = sampleInstant,
+            hasElevation = false,
+            hasTimestamps = true,
+        )
+        assertEquals(false, withTimestampsOnly.hasElevation)
+        assertEquals(true, withTimestampsOnly.hasTimestamps)
     }
 }

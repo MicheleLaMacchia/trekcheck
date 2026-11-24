@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="it">
     <string name="app_name" translatable="false">TrekCheck</string>
     <string name="home_subtitle">Prepara la tua prossima escursione sul dispositivo, senza account né accesso alla posizione.</string>
     <string name="home_status_local_offline">Locale · Offline (dati sul dispositivo)</string>
@@ -27,8 +27,35 @@
     <string name="home_plan_departure_format">Partenza: %1$s</string>
     <string name="home_plan_departure_unconfigured">Partenza da configurare</string>
     <string name="home_plan_saved_format">Salvato: %1$s</string>
-    <string name="home_notice_import_title">Importazione GPX in arrivo</string>
-    <string name="home_notice_import_body">Il selettore e il caricamento di file GPX saranno attivati nella prossima fase (Story 1.2). I dati locali restano consultabili senza account né permessi.</string>
+
     <string name="home_notice_dismiss">Chiudi</string>
-    <string name="home_notice_import_dismiss_cd">Chiudi avviso: Importazione GPX in arrivo</string>
+    <string name="home_notice_dismiss_cd">Chiudi avviso: %1$s</string>
+    <string name="home_notice_choose_another_file">Scegli un altro file</string>
+    <string name="import_default_route_title">Percorso GPX</string>
+
+    <string name="home_notice_import_success_title">Percorso GPX importato</string>
+    <string name="home_notice_import_success_body">«%1$s» salvato sul dispositivo. I timestamp storici del file non impostano la partenza: potrai configurarla nel piano.</string>
+    <string name="home_notice_import_missing_both_title">Percorso importato con dati parziali</string>
+    <string name="home_notice_import_missing_both_body">«%1$s» è salvato sul dispositivo, ma il file non contiene quota né timestamp. La distanza resta disponibile; dislivello e profilo altimetrico non sono calcolabili.</string>
+    <string name="home_notice_import_missing_elevation_title">Percorso importato senza quota</string>
+    <string name="home_notice_import_missing_elevation_body">«%1$s» è salvato sul dispositivo senza dati di quota nel file: distanza disponibile, dislivello non calcolabile. I timestamp del file non impostano la partenza.</string>
+    <string name="home_notice_import_missing_timestamps_title">Percorso importato senza timestamp</string>
+    <string name="home_notice_import_missing_timestamps_body">«%1$s» è salvato sul dispositivo con distanza e dislivello stimato. Il file non contiene orari: potrai impostare la partenza nel piano.</string>
+
+    <string name="home_error_read_failed_title">Impossibile leggere il file</string>
+    <string name="home_error_read_failed_body">Il file selezionato non è accessibile o non può essere letto. I percorsi già salvati restano intatti.</string>
+    <string name="home_error_file_too_large_title">File troppo grande</string>
+    <string name="home_error_file_too_large_body">Il file supera il limite provvisorio di 20 MB. Scegli un file GPX più leggero; i percorsi salvati restano intatti.</string>
+    <string name="home_error_disallowed_xml_title">Struttura XML non consentita</string>
+    <string name="home_error_disallowed_xml_body">Il file contiene dichiarazioni DTD o entità esterne non supportate e non è stato importato. I dati esistenti restano intatti.</string>
+    <string name="home_error_malformed_xml_title">File GPX non valido</string>
+    <string name="home_error_malformed_xml_body">Non è stato possibile leggere una traccia o un percorso GPX valido da questo file. Controlla il formato e scegli un altro file.</string>
+    <string name="home_error_invalid_coordinates_title">Coordinate non valide</string>
+    <string name="home_error_invalid_coordinates_body">Il file contiene punti con latitudine o longitudine fuori dai valori ammessi. L\'importazione è stata annullata senza modificare i percorsi salvati.</string>
+    <string name="home_error_insufficient_points_title">Punti insufficienti</string>
+    <string name="home_error_insufficient_points_body">Servono almeno 2 punti validi in una traccia o route GPX per salvare un percorso.</string>
+    <string name="home_error_too_many_points_title">Troppi punti nel tracciato</string>
+    <string name="home_error_too_many_points_body">Il tracciato supera il limite provvisorio di 200.000 punti. Scegli un file più compatto; i percorsi salvati restano intatti.</string>
+    <string name="home_error_storage_failed_title">Salvataggio locale non riuscito</string>
+    <string name="home_error_storage_failed_body">Non è stato possibile completare il salvataggio sul dispositivo. Nessun dato esistente è stato modificato; puoi scegliere un altro file.</string>
 </resources>

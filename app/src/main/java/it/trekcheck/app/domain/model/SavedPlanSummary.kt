@@ -18,6 +18,8 @@ data class SavedPlanSummary(
     val estimatedDurationSeconds: Long?,
     val updatedAtUtc: Instant,
     val dataAvailability: SavedPlanDataAvailability = SavedPlanDataAvailability.ROUTE_ONLY,
+    val hasElevation: Boolean = elevationGainMeters != null,
+    val hasTimestamps: Boolean = false,
 ) {
     init {
         require(id.isNotBlank()) { "Plan id must not be blank" }
@@ -29,6 +31,9 @@ data class SavedPlanSummary(
             require(gain.isFinite() && gain >= 0.0) {
                 "elevationGainMeters must be finite and non-negative when present"
             }
+        }
+        require(hasElevation || elevationGainMeters == null) {
+            "elevationGainMeters must be null when hasElevation is false"
         }
         estimatedDurationSeconds?.let { duration ->
             require(duration >= 0L) {
