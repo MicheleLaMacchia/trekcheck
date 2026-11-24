@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">TrekCheck</string>
+    <string name="home_subtitle">Prepara la tua prossima escursione sul dispositivo, senza account né accesso alla posizione.</string>
+    <string name="home_status_local_offline">Locale · Offline (dati sul dispositivo)</string>
+    <string name="home_status_local_only">Solo sul dispositivo · Nessun account richiesto</string>
+    <string name="home_action_import_gpx">Importa GPX</string>
+    <string name="home_action_import_gpx_in_progress">Importazione GPX in corso…</string>
+    <string name="home_action_import_hint">Nessun permesso di posizione o notifica richiesto.</string>
+    <string name="home_action_state_in_progress">Operazione in corso</string>
+    <string name="home_action_state_disabled">Non disponibile</string>
+    <string name="home_empty_title">Nessun percorso salvato</string>
+    <string name="home_empty_description">Importa un file GPX per visualizzare distanza, tempi stimati e riepilogo offline. Tutti i file restano sul dispositivo.</string>
+    <string name="home_saved_plans_heading">Percorsi locali</string>
+    <string name="home_saved_plans_offline_note">Consultabili offline</string>
+    <string name="home_plan_mode_route_only">Solo percorso</string>
+    <string name="home_plan_mode_saved_briefing">Briefing salvato</string>
+    <string name="unit_meters_format">%1$d m</string>
+    <string name="unit_kilometers_format">%1$s km</string>
+    <string name="home_plan_elevation_gain_format">+%1$d m stimato</string>
+    <string name="home_plan_elevation_unavailable">Dislivello non disponibile</string>
+    <string name="home_plan_duration_hours_minutes_format">%1$d h %2$d min stimati</string>
+    <string name="home_plan_duration_hours_format">%1$d h stimati</string>
+    <string name="home_plan_duration_minutes_format">%1$d min stimati</string>
+    <string name="home_plan_duration_under_one_minute">&lt; 1 min stimato</string>
+    <string name="home_plan_duration_unavailable">Durata stimata non disponibile</string>
+    <string name="home_plan_departure_format">Partenza: %1$s</string>
+    <string name="home_plan_departure_unconfigured">Partenza da configurare</string>
+    <string name="home_plan_saved_format">Salvato: %1$s</string>
+    <string name="home_notice_import_title">Importazione GPX in arrivo</string>
+    <string name="home_notice_import_body">Il selettore e il caricamento di file GPX saranno attivati nella prossima fase (Story 1.2). I dati locali restano consultabili senza account né permessi.</string>
+    <string name="home_notice_dismiss">Chiudi</string>
+    <string name="home_notice_import_dismiss_cd">Chiudi avviso: Importazione GPX in arrivo</string>
+</resources>
