@@ -1,5 +1,5 @@
 ---
-status: approved
+status: final
 stepsCompleted: [1, 2, 3, 4]
 inputDocuments:
   - prds/prd-TrekCheck-2026-11-20/prd.md
@@ -54,11 +54,11 @@ This document provides the complete epic and story breakdown for TrekCheck, deco
 - AD-1: confini porte/adattatori, stato immutabile e dominio indipendente dal Premium.
 - AD-2: geometria in file privati versionati, segmenti conservati, niente entità DB per punto, parser XML sicuro.
 - AD-3: Instant, ZoneId, unità SI e handling DST; dati mancanti espliciti.
-- AD-4: campioni normalizzati max 12, gateway UTC, cache senza ETA, no richiesta fuori orizzonte, diff per intervalli comparabili.
-- AD-5: contatore DataStore e protocollo idempotente tra storage, snapshot e quota; chiarire successo parziale prima di implementare.
-- AD-6: motori locali deterministici e versionati, export privato con preview coerente.
-- AD-7: nessuna attivazione fino a verifica termini e spesa zero; fallback route-only e fixture; nessun billing.
-- Starter: progetto Android esistente con modulo :app e Gradle Wrapper; non rigenerare come progetto nuovo. Compatibilità AGP/API 37 da verificare.
+- AD-4: campioni normalizzati max 12, gateway UTC, cache senza ETA, no richiesta fuori orizzonte (216 h), diff per intervalli comparabili; contratto `WeatherBatchResult` per-ID (`Available`/`Unavailable` + `GlobalFailure`); tolleranza istantanei ±45 min (`PT1H`) / ±180 min (`PT6H`), precipitazioni sull'intervallo più breve che contiene l'ETA.
+- AD-5: `BriefingGenerationCoordinator` serializzato con `Mutex`, `planVersion` sul piano, protocollo idempotente Reserve → Commit Storage → Settle con `operationId` e `reconcile()` al riavvio; successo parziale se ≥ 60% campioni validi (≥ 2 metriche su 3) e Partenza + Quota Massima (o mediano) validi.
+- AD-6: motori locali deterministici e versionati, export privato con preview coerente; Share Card senza sagoma 2D (solo profilo altimetrico stilizzato opzionale); `android:allowBackup="false"` con regole che escludono GPX, Room e DataStore.
+- AD-7: nessuna attivazione fino a verifica termini e spesa zero; fallback route-only e fixture; nessun billing; `BuildConfig.WEATHER_MODE` (`SIMULATED` predefinito, `REAL_ZERO_COST` dopo verifica); canvas vettoriale locale predefinito, tile mappa solo opt-in con informativa.
+- Starter: progetto Android esistente con modulo :app e Gradle Wrapper; non rigenerare come progetto nuovo. `minSdk = 26` già allineato; compatibilità AGP/API 37 da verificare.
 
 ### UX Design Requirements
 
@@ -68,7 +68,7 @@ This document provides the complete epic and story breakdown for TrekCheck, deco
 - UX-DR4: anteprima con nome, metriche, mappa e profilo o alternative testuali, conferma eliminazione.
 - UX-DR5: configurazione con data/ora, fuso, DST ambiguo/inesistente, profilo e passo personalizzato.
 - UX-DR6: briefing con riepilogo sopra, timeline/mappa/profilo/checklist sotto; dati mancanti, parziali, offline e fuori orizzonte distinti.
-- UX-DR7: quota disponibile prima della richiesta e consumo chiaro; criterio parziale ancora aperto.
+- UX-DR7: quota disponibile prima della richiesta e consumo chiaro secondo il criterio approvato (≥ 60% + punti chiave); indicare cosa lascia il dispositivo.
 - UX-DR8: confronto refresh con dati comparabili, conservazione briefing precedente su fallimento.
 - UX-DR9: anteprima Share Card coerente e Sharesheet, esclusione dati personali/coordinate precise di default.
 - UX-DR10: impostazioni IT/EN, unità, passo, fuso, fonti, privacy e avvertenze; nessun permesso di localizzazione o notifiche Free.
@@ -108,56 +108,66 @@ Importazione GPX, metriche, configurazione, ETA, consultazione e gestione route-
 Luce, condizioni e meteo associati a ETA, con dati simulati prima della verifica dei servizi; briefing parziale e route-only continuano a funzionare. FR-6–15, FR-20–21. Priorità P1; rete reale bloccata dalla verifica di termini e costo zero.
 
 ### Epic 3 — Aggiornare e condividere il piano
-Refresh e diff, quota Free, preferenze e Share Card locale. FR-14–21. Priorità P2; consumo quota su dati parziali richiede decisione preventiva e protocollo di recupero.
+Refresh e diff, quota Free, preferenze e Share Card locale. FR-14–21. Priorità P2; il consumo quota segue il criterio parziale approvato (≥ 60% + punti chiave) e il protocollo idempotente di AD-5.
 
 ## Epic 1: Preparare un percorso localmente
 
-Obiettivo: ottenere e riaprire un piano route-only anche senza servizi esterni. Il progetto corrente è il punto di partenza; minSdk 26 va implementato, non è già disponibile. Copre FR-1–5, FR-14–15, FR-19–21; NFR-1–6; UX-DR1–5, 10–12.
+Obiettivo: ottenere e riaprire un piano route-only anche senza servizi esterni. Il progetto corrente è il punto di partenza (`minSdk = 26` già allineato). Copre FR-1–5, FR-14–15, FR-19–21; NFR-1–6; UX-DR1–5, 10–12.
 
 ### Story 1.1: Avvio e accesso locale
-Come escursionista voglio aprire TrekCheck e importare una traccia senza account, per iniziare la pianificazione.
+Come escursionista voglio aprire TrekCheck e importare una traccia senza account, per iniziare la pianificazione. NFR-1, NFR-4–5; AD-1, AD-6; UX-DR1–3, UX-DR11.
 
 **Acceptance Criteria:**
 
 - **Given** una nuova installazione **When** apro Home **Then** vedo stato vuoto e azione Importa GPX senza login o richiesta posizione.
 - **Given** Android 8 o successivo **When** avvio l'app **Then** il requisito minimo è API 26 e il flusso è accessibile; il progetto usa Wrapper esistente e controlli CI.
-- **Given** un dispositivo senza rete **When** apro Home **Then** i dati locali disponibili rimangono consultabili. UX-DR1, UX-DR3, UX-DR11.
+- **Given** un dispositivo senza rete **When** apro Home **Then** i dati locali disponibili rimangono consultabili.
+- **Given** il tema dell'app **When** apro Home in tema chiaro o scuro **Then** sono applicati i token Material 3 di DESIGN.md (colori, tipografia, spaziatura, raggi) tramite ruoli Material, e l'azione primaria ha stati abilitato/disabilitato/progresso distinguibili e target ≥ 48 × 48 dp.
+- **Given** il manifest dell'app **When** verifico la configurazione **Then** `android:allowBackup="false"` e le regole `data_extraction_rules.xml` / `backup_rules.xml` escludono file privati, database e DataStore da backup cloud e trasferimento tra dispositivi; un test o un controllo lint verifica la configurazione.
+- **Given** un dispositivo di riferimento definito **When** misuro l'avvio a freddo **Then** registro il risultato rispetto all'obiettivo NFR-5 (< 2 s) senza dichiararlo raggiunto se non misurato.
 
 ### Story 1.2: Importare GPX in sicurezza
-Come escursionista voglio scegliere, aprire o condividere un GPX, per analizzarlo sul dispositivo. FR-1; AD-2; UX-DR3.
+Come escursionista voglio scegliere, aprire o condividere un GPX, per analizzarlo sul dispositivo. FR-1, FR-20; NFR-1–2, NFR-5; AD-2; UX-DR3.
 
 **Acceptance Criteria:**
 
 - **Given** GPX 1.0/1.1 track/route con almeno due punti validi **When** lo importo tramite selettore, apri o condividi **Then** segmenti e dati validi sono preservati localmente.
+- **Given** un import riuscito **When** salvo il percorso **Then** GPX e geometria normalizzata (segmenti, coordinate, quota opzionale) sono in file privati versionati e solo metadati e riferimenti sono persistiti nel database, senza un'entità per punto.
 - **Given** file malformato, XML con entità esterne/DTD remoto o coordinate non valide **When** importo **Then** la lettura viene rifiutata con errore recuperabile senza accessi esterni.
 - **Given** i limiti provvisori 20 MB e 200.000 punti **When** provo esattamente al limite e oltre **Then** il limite è applicato e l'eccesso genera messaggio chiaro; i limiti restano da validare.
 - **Given** quota o timestamp assenti **When** importo **Then** la traccia valida è disponibile e la mancanza è esplicita.
+- **Given** un import in corso **When** il file è grande **Then** l'elaborazione avviene fuori dal thread UI, il progresso è visibile e annunciato da TalkBack, e una fixture da 50.000 punti viene misurata rispetto all'obiettivo NFR-5 (< 2 s).
+- **Given** errori o diagnostica dell'import **When** vengono registrati **Then** non contengono GPX, coordinate, nomi di percorso o identità.
 
 ### Story 1.3: Comprendere e gestire il percorso
-Come escursionista voglio vedere le metriche e un'anteprima del percorso per capire cosa ho importato. FR-2–3; UX-DR4.
+Come escursionista voglio vedere le metriche e un'anteprima del percorso per capire cosa ho importato. FR-2–3, FR-14; AD-2, AD-7; UX-DR4.
 
 **Acceptance Criteria:**
 
-- **Given** geometria valida **When** apro anteprima **Then** vedo distanza e punti iniziale/finale; quota, dislivelli e profilo solo se disponibili e stimati ove appropriato.
-- **Given** mappa non disponibile o rete assente **When** apro anteprima **Then** metriche e alternativa testuale restano accessibili, senza promettere mappe offline.
+- **Given** geometria valida **When** apro anteprima **Then** vedo distanza, punti iniziale/finale ed eventuale punto più alto; quota, dislivelli e profilo solo se disponibili e stimati ove appropriato.
+- **Given** l'anteprima **When** visualizzo il tracciato **Then** è disegnato con il canvas vettoriale locale (zero richieste di rete) da una geometria semplificata solo per il rendering, mentre le metriche usano la geometria completa; è presente un'alternativa testuale.
+- **Given** rete assente **When** apro anteprima **Then** metriche, tracciato locale e alternativa testuale restano accessibili, senza promettere sfondi mappa offline.
 - **Given** percorso salvato **When** rinomino o confermo eliminazione **Then** l'azione è persistita e la cancellazione rimuove file e riferimenti pertinenti.
 
 ### Story 1.4: Impostare partenza e passo
-Come escursionista voglio scegliere partenza, fuso e passo per adattare il piano. FR-4, FR-19; UX-DR5, UX-DR10.
+Come escursionista voglio scegliere partenza, fuso e passo per adattare il piano. FR-4, FR-19; NFR-6; AD-3; UX-DR5, UX-DR10.
 
 **Acceptance Criteria:**
 
 - **Given** un percorso **When** configuro il piano **Then** imposto data, ora, fuso IANA modificabile e profilo, incluso passo personalizzabile con validazione.
+- **Given** un GPX con timestamp storici **When** configuro il piano **Then** la partenza scelta dall'utente prevale e i timestamp del file non vengono usati come orario di partenza.
 - **Given** ora locale inesistente o ambigua per DST **When** tento di procedere **Then** vedo il problema e scelgo una risoluzione o modifico l'ora prima del calcolo.
 - **Given** fuso del telefono diverso **When** visualizzo piano e orari **Then** l'interfaccia indica il fuso del percorso e l'istante è coerente.
 
 ### Story 1.5: Ottenere ETA e briefing route-only
-Come escursionista voglio una stima locale di percorrenza per pianificare anche senza meteo. FR-5, FR-10, FR-14–15; AD-3; UX-DR6.
+Come escursionista voglio una stima locale di percorrenza per pianificare anche senza meteo. FR-5, FR-10, FR-14–15; AD-3; UX-DR2, UX-DR6.
 
 **Acceptance Criteria:**
 
 - **Given** distanza, dislivello disponibile e profilo scelto **When** genero un piano **Then** vedo ETA di passaggio e arrivo etichettate come stime; cambiare profilo influisce sul calcolo.
 - **Given** quota assente **When** calcolo **Then** uso i dati disponibili e mostro il limite, senza inventare dislivello.
+- **Given** un briefing route-only **When** lo apro **Then** il componente riepilogo mostra percorso/distanza, partenza/fuso, durata e arrivo stimati con unità e qualificatore «stimato», e indica che il meteo non è richiesto.
+- **Given** una generazione in corso **When** premo di nuovo l'azione **Then** non avvio duplicati e il progresso è annunciato.
 - **Given** briefing route-only salvato **When** riapro offline **Then** metriche, ETA e contenuti salvati sono disponibili; i non salvati sono indicati.
 - **Given** un insieme di tracce reali **When** si verifica l'ETA **Then** gli scostamenti sono riportati senza dichiarare una precisione non misurata.
 
@@ -168,7 +178,9 @@ Come escursionista voglio scegliere lingua e unità e conoscere i limiti dell'ap
 
 - **Given** impostazioni **When** scelgo italiano/inglese, unità metriche/imperiali, passo e fuso preferiti **Then** tali preferenze persistono e i valori mostrano unità coerenti.
 - **Given** pagina informazioni **When** la apro **Then** trovo fonti, privacy e limiti: supporto alla pianificazione, nessuna garanzia sicurezza, consulenza sanitaria o guida turistica.
+- **Given** l'app Free **When** la uso **Then** non vengono richiesti permessi di localizzazione o notifiche.
 - **Given** ingrandimento testo, TalkBack o tastiera **When** uso i flussi **Then** etichette, ordine focus, target 48dp e contenuti sono verificabili senza affidarsi solo a colore o gesti.
+- **Given** orientamento portrait/landscape, schermi di dimensioni diverse o animazioni ridotte nel sistema **When** uso i flussi **Then** il contenuto resta scorrevole, nessuna azione è nascosta e le animazioni rispettano la preferenza.
 
 ## Epic 2: Consultare un briefing lungo il percorso
 
@@ -190,10 +202,10 @@ Come proprietario voglio evitare spese e uso non conforme per poter valutare il 
 
 - **Given** candidati MET Norway, OpenFreeMap e gateway senza carta di credito (es. Cloudflare Workers Free senza upgrade) **When** verifico condizioni, uso commerciale, attribuzioni, `User-Agent`, limiti e hard-stop `429/503` **Then** registro fonte, data, quote e meccanismo concreto che esclude addebiti; verifica non raggiungibile è «non verificata».
 - **Given** build flag `BuildConfig.WEATHER_MODE = SIMULATED` (predefinito) o verifica non riuscita **When** eseguo l'app **Then** provider reale e deploy restano disabilitati; fixture e route-only rimangono disponibili senza rete.
-- **Given** mappa del percorso **When** visualizzo il tracciato **Then** il default sicuro è il canvas vettoriale locale offline (zero richieste rete); lo sfondo a tile esterni è opt-in con informativa chiara su IP e area visualizzata, con fallback automatico al canvas locale se disabilitato, offline o non verificato.
+- **Given** il canvas vettoriale locale di Story 1.3 **When** l'utente attiva lo sfondo mappa online nelle impostazioni **Then** prima del primo caricamento vede un'informativa su IP e area visualizzata inviati al fornitore, con link a termini e attribuzione; con opzione disattivata, offline o fornitore non verificato si usa automaticamente il canvas locale.
 
 ### Story 2.3: Associare previsioni a punti e tempi con fixture
-Come escursionista voglio vedere il meteo previsto lungo il percorso per capire cosa potrei incontrare. FR-7–8, FR-11; AD-3–4; UX-DR6.
+Come escursionista voglio vedere il meteo previsto lungo il percorso per capire cosa potrei incontrare. FR-7–8, FR-11, FR-20; AD-3–4; UX-DR6.
 
 **Acceptance Criteria:**
 
@@ -201,6 +213,7 @@ Come escursionista voglio vedere il meteo previsto lungo il percorso per capire 
 - **Given** valori istantanei (temperatura, vento) **When** mappo sull'ETA **Then** seleziono il timestamp più vicino (a parità vince il successivo) con tolleranza massima `±45 min` su `PT1H` e `±180 min` su `PT6H`; fuori tolleranza il valore è `null` (assente) senza interpolazione.
 - **Given** precipitazioni **When** mappo sull'ETA **Then** seleziono l'intervallo `[periodStart, periodEnd)` più breve (`PT1H` preferito a `PT6H`) che contiene `etaUtc`, riportando `precipitationWindow`; se assente indico dato non disponibile.
 - **Given** un'uscita completamente fuori orizzonte (`> now + 216h` o `< now - 1h`) **When** creo il piano **Then** nessuna chiamata provider è eseguita (`OutOfHorizon`) e route-only rimane accessibile.
+- **Given** un `GlobalFailure` simulato (`Offline`, `RateLimited`, `ProviderUnavailable`) **When** richiedo il meteo **Then** vedo un messaggio comprensibile con l'azione successiva (riprovare più tardi o usare route-only), senza termini tecnici del fornitore, e i dati già disponibili restano intatti.
 - **Given** payload di campioni **When** è inviato attraverso la porta `WeatherProvider` **Then** non contiene file GPX, nome percorso, contatti o identità e non supera 12 campioni.
 
 ### Story 2.4: Luce, segnalazioni e checklist
@@ -210,15 +223,17 @@ Come escursionista voglio conoscere luce e condizioni da considerare per prepara
 
 - **Given** posizione e tempo utili **When** calcolo la luce **Then** mostro localmente tramonto e margine quando disponibili; se non calcolabili o inesistenti mostro «non disponibile».
 - **Given** soglie versionate e dati sufficienti **When** genero condizioni e checklist **Then** le regole sono deterministiche, spiegano il motivo e non prescrivono sicurezza o trattamenti sanitari.
+- **Given** una segnalazione derivata da un campione **When** la mostro **Then** è associata, quando possibile, al punto e all'orario stimato che l'hanno generata.
 - **Given** dati mancanti **When** calcolo **Then** distinguo «non disponibile» da assenza di segnalazioni e non dichiaro il percorso sicuro.
 
 ### Story 2.5: Riepilogo e timeline accessibili
-Come escursionista voglio leggere rapidamente il briefing e approfondire i punti, per comprendere le condizioni previste. FR-10–11, FR-20–21; UX-DR1–2, UX-DR6, UX-DR11–12.
+Come escursionista voglio leggere rapidamente il briefing e approfondire i punti, per comprendere le condizioni previste. FR-10–11, FR-14–15, FR-20–21; UX-DR1–2, UX-DR6, UX-DR11–12.
 
 **Acceptance Criteria:**
 
 - **Given** un briefing completo, parziale o route-only **When** lo apro **Then** riepilogo compare in alto, dettagli sotto, con etichette stima, dati mancanti e ultimo aggiornamento.
 - **Given** un punto timeline **When** lo seleziono **Then** dettagli e mappa sono collegati, ma un'alternativa testuale mostra le stesse informazioni essenziali.
+- **Given** un briefing con meteo, luce, condizioni e checklist **When** lo salvo **Then** briefing e snapshot sono conservati localmente e, riaperti offline, mostrano «Dati salvati» con data dell'aggiornamento; i dati non salvati sono indicati come non disponibili.
 - **Given** testo ingrandito e lettore schermo **When** navigo il briefing **Then** ordine, etichette e contrasto sono verificati; risultati di test utenti restano da raccogliere.
 
 ## Epic 3: Aggiornare e condividere il piano
@@ -242,8 +257,8 @@ Come escursionista voglio che una generazione fallita non consumi quota e che il
 - **Given** `BriefingGenerationCoordinator` serializzato con `Mutex` e piano con `planVersion` **When** avvio una generazione **Then** eseguo il protocollo persistente in 3 fasi: (1) Reserve (`pendingOperationId` con `opId`, `planId`, `expectedPlanVersion` in DataStore previa `reconcile()`), (2) Commit Storage atomico in Room solo se piano esiste e `planVersion == expectedPlanVersion`, (3) Settle idempotente in DataStore (`opId` in `chargedOperationIds`, `usedCount += 1`, pulizia `pendingOperationId`).
 - **Given** modifica o cancellazione del piano durante la richiesta in volo **When** arriva la risposta o scatta la modifica **Then** il `Job` in volo viene cancellato o la risposta viene scartata come `StalePlanDiscard` senza consumare quota, lasciando lo snapshot precedente marcato come non allineato.
 - **Given** crash tra salvataggio Room e aggiornamento DataStore **When** riavvio o ripeto l'operazione **Then** `reconcile()` verifica su storage lo snapshot per `pendingOperationId`: se promosso completa `Settle` una sola volta, altrimenti ripulisce senza consumare quota; nessuna nuova generazione parte prima della riconciliazione.
-- **Given** tre generazioni riuscite **When** richiedo meteo **Then** non si inviano chiamate e restano route-only, offline e share. Cancellazione briefing non riduce contatore; `allowBackup="false"` assicura coerenza locale (reinstallazione azzera contatore).
-- **Given** sto per richiedere meteo **When** vedo la conferma **Then** il numero di unità disponibili e la regola di consumo sono chiari.
+- **Given** tre generazioni riuscite **When** richiedo meteo **Then** non si inviano chiamate e restano disponibili route-only e consultazione offline. Cancellazione briefing non riduce contatore; con `allowBackup="false"` (Story 1.1) una reinstallazione azzera il contatore locale.
+- **Given** sto per richiedere meteo **When** vedo la conferma **Then** il numero di unità disponibili, la regola di consumo (solo una generazione riuscita, completa o parziale ≥ 60% con punti chiave, consuma una unità) e i dati che lasciano il dispositivo (campioni con coordinate, quota opzionale ed ETA, senza nome percorso né GPX) sono chiari; durante la generazione non posso avviarne una seconda.
 
 ### Story 3.3: Confrontare un aggiornamento
 Come escursionista voglio confrontare previsioni nuove e precedenti per capire cosa è cambiato. FR-16; AD-4–5; UX-DR8.
