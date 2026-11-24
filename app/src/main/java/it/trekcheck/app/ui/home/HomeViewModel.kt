@@ -67,6 +67,11 @@ class HomeViewModel(
             HomeEvent.ChooseAnotherFileClicked -> handleLaunchPickerClick()
 
             HomeEvent.DismissNotice -> _uiState.update { it.copy(activeNotice = null) }
+
+            is HomeEvent.OpenRouteClicked -> {
+                _uiState.update { it.copy(activeNotice = null) }
+                _effects.trySend(HomeEffect.OpenRoutePreview(event.routeId))
+            }
         }
     }
 
@@ -91,6 +96,7 @@ class HomeViewModel(
                         planTitle = result.plan.title,
                         hasElevation = result.hasElevation,
                         hasTimestamps = result.hasTimestamps,
+                        planId = result.plan.id,
                     )
 
                     is ImportGpxResult.Failure -> HomeNotice.ImportFailed(

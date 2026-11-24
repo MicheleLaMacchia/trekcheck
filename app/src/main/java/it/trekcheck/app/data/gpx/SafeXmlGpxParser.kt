@@ -1,5 +1,6 @@
 package it.trekcheck.app.data.gpx
 
+import it.trekcheck.app.domain.geo.GeoDistance
 import it.trekcheck.app.domain.model.GpxBoundingBox
 import it.trekcheck.app.domain.model.GpxImportError
 import it.trekcheck.app.domain.model.GpxImportLimits
@@ -22,10 +23,6 @@ import java.util.Locale
 import javax.xml.XMLConstants
 import javax.xml.parsers.SAXParserFactory
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 import org.xml.sax.Attributes
 import org.xml.sax.EntityResolver
 import org.xml.sax.InputSource
@@ -524,7 +521,7 @@ class SafeXmlGpxParser(
                     val point = points[index]
                     if (index > 0) {
                         val prev = points[index - 1]
-                        totalDistanceMeters += haversineDistanceMeters(
+                        totalDistanceMeters += GeoDistance.haversineDistanceMeters(
                             prev.latitude,
                             prev.longitude,
                             point.latitude,
@@ -642,7 +639,6 @@ class SafeXmlGpxParser(
     private class MalformedGpxParserException : SAXException("MALFORMED_XML")
 
     companion object {
-        private const val EARTH_RADIUS_METERS = 6_371_000.0
         private const val MIN_LATITUDE = -90.0
         private const val MAX_LATITUDE = 90.0
         private const val MIN_LONGITUDE = -180.0
@@ -663,23 +659,5 @@ class SafeXmlGpxParser(
         private const val FEATURE_EXTERNAL_PARAMETER_ENTITIES = "http://xml.org/sax/features/external-parameter-entities"
         private const val FEATURE_LOAD_EXTERNAL_DTD = "http://apache.org/xml/features/nonvalidating/load-external-dtd"
         private const val LEXICAL_HANDLER_PROPERTY = "http://xml.org/sax/properties/lexical-handler"
-
-        internal fun haversineDistanceMeters(
-            lat1Deg: Double,
-            lon1Deg: Double,
-            lat2Deg: Double,
-            lon2Deg: Double,
-        ): Double {
-            if (lat1Deg == lat2Deg && lon1Deg == lon2Deg) return 0.0
-            val lat1 = Math.toRadians(lat1Deg)
-            val lat2 = Math.toRadians(lat2Deg)
-            val dLat = lat2 - lat1
-            val dLon = Math.toRadians(lon2Deg - lon1Deg)
-            val sinHalfLat = sin(dLat / 2.0)
-            val sinHalfLon = sin(dLon / 2.0)
-            val a = sinHalfLat * sinHalfLat + cos(lat1) * cos(lat2) * sinHalfLon * sinHalfLon
-            val c = 2.0 * atan2(sqrt(a), sqrt((1.0 - a).coerceAtLeast(0.0)))
-            return EARTH_RADIUS_METERS * c
-        }
     }
 }

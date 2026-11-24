@@ -14,6 +14,12 @@ interface RouteMetadataDao {
     @Query("SELECT * FROM route_metadata WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): RouteMetadataEntity?
 
+    @Query(
+        "UPDATE route_metadata SET title = :title, updatedAtUtcEpochMillis = :updatedAtUtcEpochMillis " +
+            "WHERE id = :id",
+    )
+    suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: RouteMetadataEntity)
 

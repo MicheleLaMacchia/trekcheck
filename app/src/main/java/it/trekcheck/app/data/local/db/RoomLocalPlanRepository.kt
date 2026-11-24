@@ -1,10 +1,13 @@
 package it.trekcheck.app.data.local.db
 
+import it.trekcheck.app.domain.model.RouteMetadataSnapshot
 import it.trekcheck.app.domain.model.SavedPlanSummary
 import it.trekcheck.app.domain.repository.ImportedRouteRecord
 import it.trekcheck.app.domain.repository.LocalPlanRepository
 import it.trekcheck.app.domain.repository.RouteFileStorage
 import it.trekcheck.app.domain.repository.RouteImportRepository
+import it.trekcheck.app.domain.repository.RouteManagementRepository
+import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +17,7 @@ import kotlinx.coroutines.withContext
 class RoomLocalPlanRepository(
     private val routeMetadataDao: RouteMetadataDao,
     private val routeFileStorage: RouteFileStorage,
-) : LocalPlanRepository, RouteImportRepository {
+) : LocalPlanRepository, RouteImportRepository, RouteManagementRepository {
 
     override fun observeSavedPlans(): Flow<List<SavedPlanSummary>> =
         routeMetadataDao.observeAll().map { entities ->
@@ -34,6 +37,28 @@ class RoomLocalPlanRepository(
         } catch (throwable: Throwable) {
             cleanupFilesSafely(record.storedFiles.routeId)
             throw throwable
+        }
+    }
+
+    override suspend fun getRouteMetadata(routeId: String): RouteMetadataSnapshot? =
+        routeMetadataDao.getById(routeId)?.let { entity ->
+            RouteMetadataSnapshot(
+                routeId = entity.id,
+                title = entity.title,
+                hasElevation = entity.hasElevation,
+                elevationGainMeters = entity.elevationGainMeters,
+                elevationLossMeters = entity.elevationLossMeters,
+                planVersion = entity.planVersion,
+            )
+        }
+
+    override suspend fun updateTitle(routeId: String, title: String, updatedAtUtc: Instant): Boolean =
+        routeMetadataDao.updateTitle(routeId, title, updatedAtUtc.toEpochMilli()) > 0
+
+    override suspend fun deleteRoute(routeId: String) {
+        withContext(NonCancellable) {
+            routeMetadataDao.deleteById(routeId)
+            routeFileStorage.deleteRoute(routeId)
         }
     }
 

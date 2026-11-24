@@ -163,8 +163,8 @@ class VersionedRouteFileStorage(
     override suspend fun deleteRoute(routeId: String) {
         validateRouteId(routeId)
         val routeDir = File(routesRootDir, routeId)
-        if (routeDir.exists()) {
-            routeDir.deleteRecursively()
+        if (routeDir.exists() && !routeDir.deleteRecursively()) {
+            throw IOException("Unable to delete route directory")
         }
     }
 

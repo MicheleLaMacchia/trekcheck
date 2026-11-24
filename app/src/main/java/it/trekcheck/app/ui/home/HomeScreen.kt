@@ -1,6 +1,7 @@
 package it.trekcheck.app.ui.home
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -103,6 +105,7 @@ fun HomeScreen(
                         HomeNoticeCard(
                             notice = uiState.activeNotice,
                             canChooseAnotherFile = uiState.importActionState == PrimaryActionState.Enabled,
+                            onOpenPreview = { routeId -> onEvent(HomeEvent.OpenRouteClicked(routeId)) },
                             onChooseAnotherFile = { onEvent(HomeEvent.ChooseAnotherFileClicked) },
                             onDismiss = { onEvent(HomeEvent.DismissNotice) },
                         )
@@ -136,6 +139,7 @@ fun HomeScreen(
                         SavedPlanCard(
                             plan = plan,
                             activeLocale = activeLocale,
+                            onOpen = { onEvent(HomeEvent.OpenRouteClicked(plan.id)) },
                         )
                     }
                 }
@@ -209,6 +213,7 @@ private fun LocalModeStatusBadge(isOffline: Boolean) {
 private fun HomeNoticeCard(
     notice: HomeNotice,
     canChooseAnotherFile: Boolean,
+    onOpenPreview: (String) -> Unit,
     onChooseAnotherFile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -262,6 +267,24 @@ private fun HomeNoticeCard(
                 horizontalArrangement = Arrangement.spacedBy(spacing.space2, Alignment.End),
                 verticalArrangement = Arrangement.spacedBy(spacing.space1),
             ) {
+                val openNotice = notice as? HomeNotice.ImportSucceeded
+                val openPlanId = openNotice?.planId
+                if (openPlanId != null) {
+                    val openNoticeCd = stringResource(R.string.home_plan_open_cd, openNotice.planTitle)
+                    TextButton(
+                        onClick = { onOpenPreview(openPlanId) },
+                        modifier = Modifier
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                            .testTag("home_notice_open_preview")
+                            .semantics { contentDescription = openNoticeCd },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.home_notice_open_preview),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = spec.contentColor,
+                        )
+                    }
+                }
                 if (spec.showChooseAnotherFile) {
                     TextButton(
                         onClick = onChooseAnotherFile,
@@ -506,6 +529,7 @@ private fun SavedPlansHeader(isOffline: Boolean) {
 private fun SavedPlanCard(
     plan: SavedPlanSummary,
     activeLocale: Locale,
+    onOpen: () -> Unit,
 ) {
     val spacing = TrekCheckTheme.spacing
     val distanceText = when (val distance = HomeFormatters.resolveDistance(plan.distanceMeters, activeLocale)) {
@@ -544,8 +568,16 @@ private fun SavedPlanCard(
             stringResource(R.string.home_plan_mode_saved_briefing) to R.drawable.ic_info_notice
     }
 
+    val openDescription = stringResource(R.string.home_plan_open_cd, plan.title)
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(
+                onClickLabel = openDescription,
+                role = Role.Button,
+                onClick = onOpen,
+            ),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

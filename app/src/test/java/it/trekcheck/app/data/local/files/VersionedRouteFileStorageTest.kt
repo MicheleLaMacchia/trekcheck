@@ -281,4 +281,30 @@ class VersionedRouteFileStorageTest {
             }
         }
     }
+
+    @Test
+    fun deleteRouteThrowsIoExceptionWhenDirectoryDeletionFails() = runBlocking {
+        val routesRoot = tempFolder.newFolder("routes")
+        val storage = VersionedRouteFileStorage(routesRoot)
+        val geometry = NormalizedRouteGeometry(
+            listOf(GpxSegment(listOf(GpxTrackPoint(45.0, 11.0, 500.0), GpxTrackPoint(45.01, 11.01, 550.0)))),
+        )
+        val staging = storage.openStaging()
+        staging.outputStream().use { it.write("<gpx/>".toByteArray()) }
+        storage.commitStagedRoute("locked-route", staging, geometry)
+
+        val routeDir = File(routesRoot, "locked-route")
+        assertTrue(routeDir.setWritable(false))
+        try {
+            var thrown: IOException? = null
+            try {
+                storage.deleteRoute("locked-route")
+            } catch (io: IOException) {
+                thrown = io
+            }
+            assertNotNull(thrown)
+        } finally {
+            routeDir.setWritable(true)
+        }
+    }
 }

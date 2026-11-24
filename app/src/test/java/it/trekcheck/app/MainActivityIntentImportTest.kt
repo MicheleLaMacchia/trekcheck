@@ -270,4 +270,59 @@ class MainActivityIntentImportTest {
             controller.pause().stop().destroy()
         }
     }
+
+    @Test
+    fun incomingActionViewWhilePreviewIsOpenClosesPreviewAndShowsHomeImport() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            val initialIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.fromFile(validGpxFile),
+                ApplicationProvider.getApplicationContext(),
+                MainActivity::class.java,
+            )
+            controller.newIntent(initialIntent)
+            composeTestRule.waitUntil(5_000) {
+                composeTestRule.onAllNodesWithText("Apri anteprima").fetchSemanticsNodes().isNotEmpty()
+            }
+            composeTestRule.onNodeWithText("Apri anteprima").performScrollTo().performClick()
+            composeTestRule.waitUntil(5_000) {
+                composeTestRule.onAllNodesWithText("Riepilogo").fetchSemanticsNodes().isNotEmpty()
+            }
+
+            val secondGpx = File(tempDir, "Second_Intent.gpx").apply {
+                writeText(
+                    """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+                      <trk>
+                        <name>Nuovo Da Intent</name>
+                        <trkseg>
+                          <trkpt lat="46.1000" lon="12.1000"><ele>800.0</ele></trkpt>
+                          <trkpt lat="46.1100" lon="12.1100"><ele>950.0</ele></trkpt>
+                        </trkseg>
+                      </trk>
+                    </gpx>
+                    """.trimIndent(),
+                )
+            }
+            controller.newIntent(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.fromFile(secondGpx),
+                    ApplicationProvider.getApplicationContext(),
+                    MainActivity::class.java,
+                ),
+            )
+            composeTestRule.waitUntil(5_000) {
+                composeTestRule.onAllNodesWithText("Percorso importato senza timestamp")
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
+            composeTestRule.onNode(hasScrollToKeyAction()).performScrollToNode(hasText("Nuovo Da Intent"))
+            composeTestRule.onNodeWithText("Nuovo Da Intent").assertIsDisplayed()
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
 }

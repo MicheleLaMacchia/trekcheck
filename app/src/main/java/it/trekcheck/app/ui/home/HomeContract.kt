@@ -9,6 +9,7 @@ sealed interface HomeNotice {
         val planTitle: String,
         val hasElevation: Boolean,
         val hasTimestamps: Boolean,
+        val planId: String? = null,
     ) : HomeNotice
 
     data class ImportFailed(
@@ -18,6 +19,7 @@ sealed interface HomeNotice {
 
 sealed interface HomeEffect {
     data object LaunchGpxPicker : HomeEffect
+    data class OpenRoutePreview(val routeId: String) : HomeEffect
 }
 
 data class HomeUiState(
@@ -34,4 +36,5 @@ sealed interface HomeEvent {
     data object ImportGpxClicked : HomeEvent
     data object ChooseAnotherFileClicked : HomeEvent
     data object DismissNotice : HomeEvent
+    data class OpenRouteClicked(val routeId: String) : HomeEvent
 }

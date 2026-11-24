@@ -4,6 +4,7 @@ import it.trekcheck.app.domain.model.GpxImportError
 import it.trekcheck.app.domain.model.GpxImportLimits
 import it.trekcheck.app.domain.model.GpxParseResult
 import it.trekcheck.app.domain.model.ImportGpxResult
+import it.trekcheck.app.domain.model.RouteTitleSanitizer
 import it.trekcheck.app.domain.model.SavedPlanDataAvailability
 import it.trekcheck.app.domain.model.SavedPlanSummary
 import it.trekcheck.app.domain.repository.GpxInputSource
@@ -224,14 +225,13 @@ class ImportGpxUseCase(
 
     companion object {
         private const val DEFAULT_FALLBACK_ROUTE_TITLE = "Percorso GPX"
-        private const val MAX_TITLE_LENGTH = 160
 
         internal fun resolveRouteTitle(
             parsedName: String?,
             suggestedTitle: String?,
             fallbackTitle: String = DEFAULT_FALLBACK_ROUTE_TITLE,
         ): String {
-            val sanitizedParsed = sanitizeTitle(parsedName)
+            val sanitizedParsed = RouteTitleSanitizer.sanitize(parsedName)
             if (sanitizedParsed != null) return sanitizedParsed
 
             val withoutExt = suggestedTitle
@@ -243,38 +243,10 @@ class ImportGpxUseCase(
                         else -> name
                     }
                 }
-            val sanitizedSuggested = sanitizeTitle(withoutExt)
+            val sanitizedSuggested = RouteTitleSanitizer.sanitize(withoutExt)
             if (sanitizedSuggested != null) return sanitizedSuggested
 
-            return sanitizeTitle(fallbackTitle) ?: DEFAULT_FALLBACK_ROUTE_TITLE
-        }
-
-        private fun sanitizeTitle(raw: String?): String? {
-            if (raw.isNullOrBlank()) return null
-            val collapsed = buildString(raw.length) {
-                var lastWasSpace = true
-                for (ch in raw) {
-                    if (ch.isISOControl() || ch.isWhitespace()) {
-                        if (!lastWasSpace) {
-                            append(' ')
-                            lastWasSpace = true
-                        }
-                    } else {
-                        append(ch)
-                        lastWasSpace = false
-                    }
-                }
-            }.trim()
-            if (collapsed.isEmpty()) return null
-            return if (collapsed.length <= MAX_TITLE_LENGTH) {
-                collapsed
-            } else {
-                var end = MAX_TITLE_LENGTH
-                if (Character.isHighSurrogate(collapsed[end - 1])) {
-                    end -= 1
-                }
-                collapsed.substring(0, end).trimEnd().ifEmpty { null }
-            }
+            return RouteTitleSanitizer.sanitize(fallbackTitle) ?: DEFAULT_FALLBACK_ROUTE_TITLE
         }
     }
 }

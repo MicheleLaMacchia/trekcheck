@@ -109,6 +109,8 @@ class RoomLocalPlanRepositoryTest {
         val failingDao = object : RouteMetadataDao {
             override fun observeAll(): Flow<List<RouteMetadataEntity>> = database.routeMetadataDao().observeAll()
             override suspend fun getById(id: String): RouteMetadataEntity? = database.routeMetadataDao().getById(id)
+            override suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int =
+                database.routeMetadataDao().updateTitle(id, title, updatedAtUtcEpochMillis)
             override suspend fun insert(entity: RouteMetadataEntity) {
                 throw IllegalStateException("Simulated SQLite constraint failure")
             }
@@ -190,6 +192,8 @@ class RoomLocalPlanRepositoryTest {
         val cancellingDao = object : RouteMetadataDao {
             override fun observeAll(): Flow<List<RouteMetadataEntity>> = database.routeMetadataDao().observeAll()
             override suspend fun getById(id: String): RouteMetadataEntity? = database.routeMetadataDao().getById(id)
+            override suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int =
+                database.routeMetadataDao().updateTitle(id, title, updatedAtUtcEpochMillis)
             override suspend fun insert(entity: RouteMetadataEntity) {
                 database.routeMetadataDao().insert(entity)
                 throw CancellationException("Cancelled right after insert")
@@ -217,6 +221,36 @@ class RoomLocalPlanRepositoryTest {
         assertNull(database.routeMetadataDao().getById("cancel-after-insert"))
         assertEquals(0, database.routeMetadataDao().count())
         assertFalse(File(routesRoot, "cancel-after-insert").exists())
+    }
+
+    @Test
+    fun renamePersistsTitleWithoutChangingPlanVersionAndDeleteRemovesRowAndFiles() = runBlocking {
+        val repository = RoomLocalPlanRepository(database.routeMetadataDao(), storage)
+        repository.saveImportedRoute(
+            createImportedRecord("route-manage", "Titolo iniziale", hasElevation = true, hasTimestamps = false, pointCount = 5),
+        )
+        val before = repository.getRouteMetadata("route-manage")!!
+        assertEquals(250.0, before.elevationGainMeters!!, 0.0)
+        assertEquals(100.0, before.elevationLossMeters!!, 0.0)
+
+        assertTrue(repository.updateTitle("route-manage", "Nuovo titolo", Instant.parse("2026-11-25T08:00:00Z")))
+        val after = repository.getRouteMetadata("route-manage")!!
+        assertEquals("Nuovo titolo", after.title)
+        assertEquals(before.planVersion, after.planVersion)
+        assertEquals(100.0, after.elevationLossMeters!!, 0.0)
+        assertEquals("Nuovo titolo", repository.observeSavedPlans().first().single().title)
+        assertEquals(
+            Instant.parse("2026-11-25T08:00:00Z"),
+            repository.observeSavedPlans().first().single().updatedAtUtc,
+        )
+        assertFalse(repository.updateTitle("missing", "X", Instant.EPOCH))
+
+        assertTrue(File(routesRoot, "route-manage/source_v1.gpx").exists())
+        assertTrue(File(routesRoot, "route-manage/geometry_v1.bin").exists())
+        repository.deleteRoute("route-manage")
+        assertNull(database.routeMetadataDao().getById("route-manage"))
+        assertNull(repository.getRouteMetadata("route-manage"))
+        assertFalse(File(routesRoot, "route-manage").exists())
     }
 
     private suspend fun createImportedRecord(

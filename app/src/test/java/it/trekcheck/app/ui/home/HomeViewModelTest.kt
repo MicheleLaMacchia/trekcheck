@@ -219,6 +219,7 @@ class HomeViewModelTest {
                 planTitle = "Cima Carega",
                 hasElevation = false,
                 hasTimestamps = false,
+                planId = "imported-1",
             ),
             viewModel.uiState.value.activeNotice,
         )
