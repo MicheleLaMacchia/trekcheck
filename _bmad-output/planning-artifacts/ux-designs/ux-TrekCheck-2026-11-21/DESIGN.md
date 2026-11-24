@@ -1,8 +1,8 @@
 ---
 name: TrekCheck UX MVP
-status: draft
+status: approved
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-24
 description: Proposta visuale Android Compose per pianificare un'escursione con informazioni leggibili e trasparenti.
 sources:
   - ../../prds/prd-TrekCheck-2026-11-20/prd.md

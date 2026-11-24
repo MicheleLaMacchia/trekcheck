@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 stepsCompleted: [1, 2, 3, 4]
 inputDocuments:
   - prds/prd-TrekCheck-2026-11-20/prd.md
@@ -188,19 +188,20 @@ Come proprietario voglio evitare spese e uso non conforme per poter valutare il 
 
 **Acceptance Criteria:**
 
-- **Given** candidati MET Norway, OpenFreeMap e gateway **When** verifico condizioni, uso commerciale, attribuzioni, limiti e piano operativo **Then** registro fonte, data, quote e meccanismo concreto che esclude addebiti; verifica non raggiungibile è «non verificata».
-- **Given** verifica non riuscita o spesa potenziale **When** eseguo la versione di sviluppo **Then** provider reale e deploy restano disabilitati; fixture e route-only rimangono disponibili senza rete.
-- **Given** un limite raggiunto o servizio non disponibile **When** la funzione tenta accesso **Then** si arresta prima dell'addebito e spiega il fallback; non si abilita billing o upgrade.
+- **Given** candidati MET Norway, OpenFreeMap e gateway senza carta di credito (es. Cloudflare Workers Free senza upgrade) **When** verifico condizioni, uso commerciale, attribuzioni, `User-Agent`, limiti e hard-stop `429/503` **Then** registro fonte, data, quote e meccanismo concreto che esclude addebiti; verifica non raggiungibile è «non verificata».
+- **Given** build flag `BuildConfig.WEATHER_MODE = SIMULATED` (predefinito) o verifica non riuscita **When** eseguo l'app **Then** provider reale e deploy restano disabilitati; fixture e route-only rimangono disponibili senza rete.
+- **Given** mappa del percorso **When** visualizzo il tracciato **Then** il default sicuro è il canvas vettoriale locale offline (zero richieste rete); lo sfondo a tile esterni è opt-in con informativa chiara su IP e area visualizzata, con fallback automatico al canvas locale se disabilitato, offline o non verificato.
 
 ### Story 2.3: Associare previsioni a punti e tempi con fixture
 Come escursionista voglio vedere il meteo previsto lungo il percorso per capire cosa potrei incontrare. FR-7–8, FR-11; AD-3–4; UX-DR6.
 
 **Acceptance Criteria:**
 
-- **Given** risposte simulate con ETA UTC e risoluzioni miste **When** associo campioni e tempi **Then** mostro fonte, validità, freschezza, risoluzione e valori disponibili nel fuso del percorso.
-- **Given** dato istantaneo fuori tolleranza o precipitazione il cui periodo non contiene ETA **When** mappo dati **Then** indico assenza, senza interpolare valori non definiti.
-- **Given** un'uscita fuori orizzonte **When** creo il piano **Then** nessuna chiamata provider è eseguita e route-only rimane accessibile; tolleranze sono da definire prima dell'integrazione reale.
-- **Given** payload di campioni **When** è inviato attraverso la porta di test **Then** non contiene file GPX, nome percorso, contatti o identità e non supera 12 campioni.
+- **Given** contratto `WeatherBatchResult` (`Success` con mappa per-`SampleId` di `Available`/`Unavailable(reason)` o `GlobalFailure`) e risposte simulate con ETA UTC e risoluzioni miste (`PT1H` / `PT6H`) **When** associo campioni e tempi **Then** mostro fonte, validità, freschezza, risoluzione e valori disponibili nel fuso del percorso.
+- **Given** valori istantanei (temperatura, vento) **When** mappo sull'ETA **Then** seleziono il timestamp più vicino (a parità vince il successivo) con tolleranza massima `±45 min` su `PT1H` e `±180 min` su `PT6H`; fuori tolleranza il valore è `null` (assente) senza interpolazione.
+- **Given** precipitazioni **When** mappo sull'ETA **Then** seleziono l'intervallo `[periodStart, periodEnd)` più breve (`PT1H` preferito a `PT6H`) che contiene `etaUtc`, riportando `precipitationWindow`; se assente indico dato non disponibile.
+- **Given** un'uscita completamente fuori orizzonte (`> now + 216h` o `< now - 1h`) **When** creo il piano **Then** nessuna chiamata provider è eseguita (`OutOfHorizon`) e route-only rimane accessibile.
+- **Given** payload di campioni **When** è inviato attraverso la porta `WeatherProvider` **Then** non contiene file GPX, nome percorso, contatti o identità e non supera 12 campioni.
 
 ### Story 2.4: Luce, segnalazioni e checklist
 Come escursionista voglio conoscere luce e condizioni da considerare per preparare il materiale. FR-9, FR-12–13, FR-21; AD-6; UX-DR6.
@@ -224,22 +225,24 @@ Come escursionista voglio leggere rapidamente il briefing e approfondire i punti
 
 Obiettivo: rivedere i cambiamenti e condividere il briefing senza perdere dati; FR-14–21; NFR-1–4, NFR-6; UX-DR7–11.
 
-### Story 3.1: Decidere il criterio di copertura parziale
-Come proprietario voglio una regola esplicita di successo per evitare consumi Free sorprendenti. FR-7, FR-16–17; AD-5; UX-DR7.
+### Story 3.1: Implementare e verificare il criterio di copertura parziale
+Come proprietario voglio una regola deterministica e testata di successo parziale per evitare consumi Free sorprendenti. FR-7, FR-16–17; AD-5; UX-DR7.
 
 **Acceptance Criteria:**
 
-- **Given** la baseline non definisce il minimo meteo sufficiente **When** progetto la regola **Then** documento soglia e scenari di dati completi, parziali, mancanti e errore con casi di test e presento la proposta per approvazione.
-- **Given** la regola non è ancora definita **When** pianifico l'integrazione **Then** il consumo quota per risposta parziale resta bloccato; nessuna scelta è presentata come già approvata.
+- **Given** un campione `Available` **When** valuto la validità **Then** è `ValidSample` se ha almeno 2 metriche su 3 tra temperatura, vento e precipitazione (o temperatura + vento se la finestra precipitazioni non è fornita).
+- **Given** una risposta batch per `N` campioni **When** applico il criterio approvato **Then** è `COMPLETE` se il 100% ha 3/3 metriche, è `PARTIAL` (sufficiente, 1 quota) se almeno il **60% dei campioni** (`ceil(0.60 * N)`) è `ValidSample` **E** sono validi i punti chiave (**Partenza** e **Quota Massima**, o punto mediano se manca la quota nel GPX).
+- **Given** copertura sotto soglia o punto chiave mancante **When** valuto la risposta **Then** restituisco `InsufficientWeatherCoverage`, non promuovo lo snapshot e consumo 0 quote, con test unitari su scenari completi, parziali, soglia limite, mancanti ed errore.
 
 ### Story 3.2: Consumare la quota una sola volta
 Come escursionista voglio che una generazione fallita non consumi quota e che il conteggio sia comprensibile. FR-16–17; AD-5; UX-DR7.
 
 **Acceptance Criteria:**
 
-- **Given** la regola di successo parziale è definita **When** un briefing meteo riesce ed è salvato **Then** il contatore persistente aumenta esattamente una volta; un errore o salvataggio fallito non consuma.
-- **Given** crash tra salvataggio e aggiornamento DataStore **When** riavvio o ripeto la stessa operazione **Then** il protocollo persistente idempotente riconcilia senza doppio conteggio o perdita del briefing; non avvia altre generazioni prima della riconciliazione.
-- **Given** tre generazioni riuscite **When** richiedo meteo **Then** non si inviano chiamate e restano route-only, offline e share. Cancellazione briefing non riduce contatore; reinstallazione può azzerarlo.
+- **Given** `BriefingGenerationCoordinator` serializzato con `Mutex` e piano con `planVersion` **When** avvio una generazione **Then** eseguo il protocollo persistente in 3 fasi: (1) Reserve (`pendingOperationId` con `opId`, `planId`, `expectedPlanVersion` in DataStore previa `reconcile()`), (2) Commit Storage atomico in Room solo se piano esiste e `planVersion == expectedPlanVersion`, (3) Settle idempotente in DataStore (`opId` in `chargedOperationIds`, `usedCount += 1`, pulizia `pendingOperationId`).
+- **Given** modifica o cancellazione del piano durante la richiesta in volo **When** arriva la risposta o scatta la modifica **Then** il `Job` in volo viene cancellato o la risposta viene scartata come `StalePlanDiscard` senza consumare quota, lasciando lo snapshot precedente marcato come non allineato.
+- **Given** crash tra salvataggio Room e aggiornamento DataStore **When** riavvio o ripeto l'operazione **Then** `reconcile()` verifica su storage lo snapshot per `pendingOperationId`: se promosso completa `Settle` una sola volta, altrimenti ripulisce senza consumare quota; nessuna nuova generazione parte prima della riconciliazione.
+- **Given** tre generazioni riuscite **When** richiedo meteo **Then** non si inviano chiamate e restano route-only, offline e share. Cancellazione briefing non riduce contatore; `allowBackup="false"` assicura coerenza locale (reinstallazione azzera contatore).
 - **Given** sto per richiedere meteo **When** vedo la conferma **Then** il numero di unità disponibili e la regola di consumo sono chiari.
 
 ### Story 3.3: Confrontare un aggiornamento
@@ -257,24 +260,25 @@ Come escursionista voglio condividere un riepilogo per informare una persona fid
 **Acceptance Criteria:**
 
 - **Given** briefing salvato **When** apro anteprima **Then** vedo contenuto effettivamente esportato in lingua e unità scelte con attribuzioni e massimo tre segnalazioni.
-- **Given** impostazioni predefinite **When** esporto **Then** non includo GPX, coordinate precise, contatti o note; definire e verificare se una sagoma grafica può rivelare luoghi prima di includerla.
+- **Given** impostazioni predefinite MVP **When** esporto **Then** non includo GPX, coordinate precise, contatti, note né **sagoma 2D del tracciato**; includo solo riepilogo testuale/metrico e profilo altimetrico stilizzato opzionale senza georeferenziazione.
 - **Given** dispositivo offline **When** condivido i dati salvati **Then** l'immagine è generata localmente, Sharesheet si apre solo su azione esplicita e nessuna quota è consumata.
 - **Given** errore export **When** riprovo **Then** il briefing non è cancellato e il messaggio spiega l'azione successiva.
 
 ### Story 3.5: Usare meteo reale senza spesa
 Come escursionista voglio ricevere previsioni reali quando i servizi gratuiti sono stati verificati, per ottenere un briefing utile senza creare costi al progetto. FR-6–8, FR-16–17; AD-4, AD-5, AD-7.
 
-**Dipendenze e blocchi:** completare 2.2, 2.3, 3.1 e 3.2; l'accesso reale e l'eventuale deploy sono bloccati finché termini, attribuzioni e arresto prima degli addebiti non sono verificati e il criterio dei parziali non è definito.
+**Dipendenze e gate operativo:** completare 2.2, 2.3, 3.1 e 3.2; l'attivazione di `BuildConfig.WEATHER_MODE = REAL_ZERO_COST` e l'eventuale deploy gateway sono subordinati alla verifica documentata di Story 2.2 (termini, attribuzioni, `User-Agent` e hard-stop `429/503` senza carta di credito).
 
 **Acceptance Criteria:**
 
-- **Given** le verifiche documentate sono positive e un ambiente gratuito con limite rigido è configurato **When** richiedo un briefing meteo **Then** gateway normalizza coordinate/quota, applica validazioni, cache raw senza ETA e User-Agent richiesto, restituisce DTO UTC e attribuzioni, senza GPX o identificativi.
+- **Given** le verifiche documentate di Story 2.2 sono positive e `WEATHER_MODE=REAL_ZERO_COST` è configurato su infrastruttura senza billing **When** richiedo un briefing meteo **Then** gateway normalizza coordinate/quota, applica validazioni, cache raw senza ETA e `User-Agent` richiesto, restituisce `WeatherBatchResult` UTC e attribuzioni, senza GPX o identificativi.
 - **Given** quote esaurite, termini non verificati o configurazione non capace di prevenire costi **When** tento l'accesso **Then** nessuna chiamata reale o deploy a pagamento avviene e route-only rimane disponibile.
-- **Given** risposte complete, parziali, timeout, 429 e 5xx **When** applico il criterio approvato e ripeto le richieste **Then** quota, recupero, cache e fallback rispettano i test di 3.1–3.3; nessun segreto compare nei log.
+- **Given** risposte complete, parziali (`>= 60%` + punti chiave), sotto soglia, timeout, 429 e 5xx **When** applico il criterio approvato e ripeto le richieste **Then** quota, recupero, cache e fallback rispettano i test di 3.1–3.3; nessun segreto compare nei log.
 
 ## Verifica copertura e stato del piano
 
-- FR-1–21 e NFR-1–6 sono inventariati; l'integrazione reale FR-7/8/16/17 è coperta dalla Story 3.5 dopo le barriere 2.2 e 3.1–3.2. UX-DR1–12 coperti dalle storie indicate negli epic. I criteri di prestazione e accessibilità richiedono dispositivi, metodi e verifiche specifiche prima della consegna.
-- **Indipendenza:** Epic 1 è route-only; Epic 2 ha valore dimostrativo con fixture, ma il meteo per utenti non va distribuito prima della quota e delle verifiche in Epic 3; Epic 3 usa i risultati precedenti. La separazione segue la barriera di rischio dei fornitori e della contabilizzazione, pur coinvolgendo gli stessi componenti briefing.
-- **Blocchi aperti:** termini e costo zero verificabili dei servizi; meccanismo che impedisce addebiti; criterio approvato per successo meteo parziale; tolleranza temporale, protocollo di recupero quota e test crash; privacy della sagoma nella Share Card. Senza queste decisioni le storie relative non sono pronte per implementazione operativa.
-- **Stato:** piano proposto elaborato autonomamente; UX e architettura sono bozze e richiedono revisione coordinata. Nessuna story è stata implementata o testata e non si attribuisce approvazione esplicita ai dettagli proposti.
+- FR-1–21 e NFR-1–6 sono inventariati e coperti; `minSdk = 26` è allineato in `app/build.gradle.kts` e `android:allowBackup="false"` è fissato per l'MVP. UX-DR1–12 sono coperti dalle storie indicate negli epic.
+- **Decisioni architetturali approvate (2026-11-24):** contratto `WeatherBatchResult` per-ID e tolleranze adattive (`±45m` su `PT1H`, `±180m` su `PT6H`, orizzonte 216h); soglia successo parziale `>= 60%` + Partenza e Quota Massima/mediana; protocollo idempotente `operationId` con `planVersion` + `Mutex`; gate `WEATHER_MODE` zero-billing + tile mappa opt-in con canvas vettoriale locale; Share Card senza sagoma 2D + `allowBackup="false"`.
+- **Indipendenza:** Epic 1 è route-only; Epic 2 utilizza fixture deterministiche (`WEATHER_MODE=SIMULATED`); Epic 3 completa quota, refresh, Share Card e (dopo gate Story 2.2) integrazione reale zero-cost.
+- **Gate operativi residui (non bloccanti per l'avvio dello sprint):** verifica documentata servizi reali prima di attivare `WEATHER_MODE=REAL_ZERO_COST` in Story 3.5; validazione prestazioni, accessibilità e usabilità con utenti/dispositivi reali prima del rilascio pubblico.
+- **Stato:** approvato per l'avvio dell'implementazione MVP Free.

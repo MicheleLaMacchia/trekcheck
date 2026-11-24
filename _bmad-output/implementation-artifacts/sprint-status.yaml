@@ -1,0 +1,69 @@
+# generated: 11-24-2026 04:40
+# project: TrekCheck
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: "_bmad-output/implementation-artifacts"
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+
+generated: 11-24-2026 04:40
+last_updated: 11-24-2026 04:40
+project: TrekCheck
+project_key: NOKEY
+tracking_system: file-system
+story_location: "_bmad-output/implementation-artifacts"
+
+development_status:
+  epic-1: backlog
+  1-1-avvio-e-accesso-locale: backlog
+  1-2-importare-gpx-in-sicurezza: backlog
+  1-3-comprendere-e-gestire-il-percorso: backlog
+  1-4-impostare-partenza-e-passo: backlog
+  1-5-ottenere-eta-e-briefing-route-only: backlog
+  1-6-preferenze-e-limiti-chiari: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-selezionare-punti-significativi: backlog
+  2-2-verificare-i-servizi-gratuiti-prima-dell-uso: backlog
+  2-3-associare-previsioni-a-punti-e-tempi-con-fixture: backlog
+  2-4-luce-segnalazioni-e-checklist: backlog
+  2-5-riepilogo-e-timeline-accessibili: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-implementare-e-verificare-il-criterio-di-copertura-parziale: backlog
+  3-2-consumare-la-quota-una-sola-volta: backlog
+  3-3-confrontare-un-aggiornamento: backlog
+  3-4-condividere-una-scheda-privata: backlog
+  3-5-usare-meteo-reale-senza-spesa: backlog
+  epic-3-retrospective: optional
