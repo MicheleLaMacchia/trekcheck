@@ -1,8 +1,8 @@
 ---
 title: TrekCheck — esperienza MVP Free
-status: draft
+status: approved
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-24
 sources:
   - ../../prds/prd-TrekCheck-2026-11-20/prd.md
   - ../../briefs/brief-TrekCheck-2026-11-20/brief.md

@@ -7,7 +7,7 @@ paradigm: layered-ports-and-adapters
 scope: Android MVP Free e gateway meteo candidato
 status: final
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-24
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5, NFR-6]
 sources:
   - ../../prds/prd-TrekCheck-2026-11-20/prd.md
@@ -56,35 +56,35 @@ flowchart LR
 
 - **Binds:** FR-6–FR-8, FR-16, NFR-1–NFR-3.
 - **Prevents:** diffusione DTO proprietari, dati identificativi al fornitore, cache errate e chiamate fuori orizzonte.
-- **Rule:** un'unica porta `WeatherProvider` riceve al massimo 12 campioni con ID, coordinate, quota opzionale ed ETA UTC; non riceve nome percorso, identità o GPX intero. Gateway valida payload e restituisce DTO UTC normalizzato con ID, validità, periodo, risoluzione, fonte e freschezza; dominio non legge schema raw provider. Cache raw normalizza coordinate e quota prima della chiave e dell'upstream e non include ETA; la corrispondenza temporale è separata. Fuori orizzonte non inviare chiamate meteo. Intervalli di precipitazione sono confrontabili solo se equivalenti; valore istantaneo fuori tolleranza è assente. Parametri e criterio dati parziali restano bloccanti in Deferred.
+- **Rule:** un'unica porta `WeatherProvider` riceve al massimo 12 campioni con ID, coordinate, quota opzionale ed ETA UTC; non riceve nome percorso, identità o GPX intero. Gateway valida payload e restituisce un contratto tipizzato `WeatherBatchResult` (`Success` con mappa per-`SampleId` di `SampleWeatherStatus.Available` / `Unavailable(reason)` + `fetchedAtUtc` e `sourceAttribution`, oppure `GlobalFailure`: `Offline`, `OutOfHorizon`, `RateLimited`, `ProviderUnavailable`); il dominio non legge schema raw provider. Cache raw normalizza coordinate e quota prima della chiave e dell'upstream e non include ETA; la corrispondenza temporale è separata. Orizzonte massimo: 9 giorni (216 h); se tutti i campioni sono fuori orizzonte (`> now + 216h` o `< now - 1h`), non inviare chiamate meteo. Matching temporale adattivo senza interpolazione: valori istantanei (temperatura, vento) selezionano il timestamp più vicino (a parità vince il successivo) con tolleranza massima `±45 min` per risoluzione `PT1H` e `±180 min` per risoluzione `PT6H`, altrimenti `null`; precipitazioni selezionano l'intervallo `[periodStart, periodEnd)` più breve (`PT1H` preferito a `PT6H`) che contiene `etaUtc` (`periodStart <= etaUtc < periodEnd`), riportando sempre `precipitationWindow`, altrimenti `null`. Intervalli di precipitazione sono confrontabili solo se equivalenti.
 
 ### AD-5 — Proprietà del briefing e quota [ADOPTED]
 
 - **Binds:** FR-14–FR-17, NFR-2.
-- **Prevents:** consumo quota su errore, doppio addebito logico e perdita del briefing valido.
-- **Rule:** un solo coordinatore di generazione serializza le operazioni meteo per installazione; il contatore Free monotono vive in DataStore e non dipende dal numero di briefing. Usare ID di operazione stabile e protocollo persistente idempotente di completamento/recupero fra storage briefing e DataStore: al riavvio ogni operazione riuscita viene conteggiata esattamente una volta, nessun risultato non salvato consuma quota. Finché una operazione è incompleta, riconciliare prima di autorizzare un'altra generazione. Il puntatore allo snapshot corrente cambia solo con snapshot e briefing salvati; il fallimento conserva il precedente. Se piano, partenza, fuso o profilo cambiano durante il recupero, scartare la risposta obsoleta senza consumare quota. Il protocollo concreto e il confine di successo parziale devono essere specificati e testati prima dell'implementazione meteo.
+- **Prevents:** consumo quota su errore, doppio addebito logico, race condition su modifiche del piano e perdita del briefing valido.
+- **Rule:** un solo `BriefingGenerationCoordinator` serializza le operazioni meteo per installazione tramite `Mutex`. Ogni `TripPlan` mantiene un `planVersion: Long` monotono incrementato a ogni modifica di partenza, fuso, profilo o geometria; una modifica o cancellazione del piano cancella il `Job` in volo e marca lo snapshot precedente come non allineato senza eliminarlo. Il contatore Free monotono (`usedCount`, 0..3) vive in DataStore insieme a `chargedOperationIds` e `pendingOperationId` (`opId`, `planId`, `expectedPlanVersion`). Protocollo persistente idempotente in 3 fasi: (1) **Reserve** in DataStore (previa `reconcile()` se esiste un `pendingOperationId` e verifica `usedCount < 3`); (2) **Commit Storage** atomico in Room che salva snapshot/briefing con `operationId = opId` e promuove `currentSnapshotId` *solo* se il piano esiste ancora e `planVersion == expectedPlanVersion` (altrimenti scarta come `StalePlanDiscard` senza consumare quota); (3) **Settle** idempotente in DataStore (se `opId !in chargedOperationIds`, `usedCount += 1` e aggiunge `opId`, poi azzera `pendingOperationId`). Al riavvio `reconcile()` verifica su storage se esiste uno snapshot promosso per `pendingOperationId`: se sì completa il `Settle`, se no ripulisce senza consumare quota. **Criterio di successo parziale:** un campione è `ValidSample` se `Available` con almeno 2 metriche su 3 tra temperatura, vento e precipitazione (o temperatura + vento se finestra precipitazioni non fornita); la risposta è sufficiente (`COMPLETE` se 100% con 3/3 metriche, altrimenti `PARTIAL`, 1 quota consumata) se almeno il **60% dei campioni richiesti** (`ceil(0.60 * N)`) è `ValidSample` **E** sono validi i punti chiave (**Partenza** e **Quota Massima**, o punto mediano se manca la quota nel GPX). Sotto soglia: `InsufficientWeatherCoverage`, 0 quote consumate e snapshot precedente intatto.
 
 ### AD-6 — Condizioni, checklist e condivisione [ADOPTED]
 
 - **Binds:** FR-9–FR-13, FR-18, FR-21.
 - **Prevents:** motori divergenti, affermazioni di sicurezza e fughe dati nell'export.
-- **Rule:** luce, regole e checklist sono calcoli locali deterministici e versionati; i risultati distinguono assente, parziale e presente e non prescrivono decisioni sanitarie o sicurezza. Share Card deriva dal briefing, è generata localmente; coordinate precise, GPX, contatti e note sono esclusi di default. Testo, anteprima e immagine rispettano stesse impostazioni e attribuzioni applicabili.
+- **Rule:** luce, regole e checklist sono calcoli locali deterministici e versionati; i risultati distinguono assente, parziale e presente e non prescrivono decisioni sanitarie o sicurezza. Share Card deriva dal briefing, è generata localmente; coordinate precise, GPX, contatti, note e **sagoma 2D del tracciato** sono esclusi nell'MVP (la Share Card include solo riepilogo testuale/metrico e profilo altimetrico stilizzato opzionale senza georeferenziazione). Testo, anteprima e immagine rispettano stesse impostazioni e attribuzioni applicabili.
 
 ### AD-7 — Operatività a costo zero [ADOPTED]
 
 - **Binds:** tutte le dipendenze esterne e ambienti.
-- **Prevents:** addebiti non autorizzati e blocco del percorso locale per indisponibilità servizi.
-- **Rule:** nessun servizio, piano, attivazione o funzione che possa comportare una spesa è abilitato senza controllo preventivo che garantisca arresto prima di un addebito; un servizio privo di tale garanzia non viene attivato. Non attivare billing o upgrade automatici. MET Norway, gateway e OpenFreeMap sono candidati e non vanno resi operativi finché non sono verificate condizioni, licenza, attribuzione e costi attuali. Se la verifica, rete o quota operativa falliscono, nessuna chiamata esterna e modalità locale route-only con spiegazione. La cache non implica gratuità illimitata. Nessuna credenziale o percorso di sessione nel repository.
+- **Prevents:** addebiti non autorizzati, esposizione involontaria su tile mappa e blocco del percorso locale per indisponibilità servizi.
+- **Rule:** nessun servizio, piano, attivazione o funzione con billing o carta di credito collegata senza hard-stop nativo prima di qualsiasi addebito è abilitato; cache e alert non costituiscono garanzie. Build flag esplicito `BuildConfig.WEATHER_MODE`: `SIMULATED` (predefinito per sviluppo e test con fixture deterministiche a costo 0 €) e `REAL_ZERO_COST` (attivabile solo in Story 3.5 dopo verifica documentata di termini, `User-Agent`, attribuzioni e infrastruttura senza metodo di pagamento con hard-stop `429/503`, es. Cloudflare Workers Free senza upgrade + MET Norway). Per le mappe: la vista predefinita sicura è il canvas vettoriale locale offline (zero richieste rete); lo sfondo a tile esterni (es. OpenFreeMap verificato gratuito) è **opt-in esplicito** con informativa chiara su esposizione IP e area visualizzata, con fallback automatico al canvas locale quando disabilitato, offline o non verificato. Nessuna credenziale o percorso di sessione nel repository.
 
 ## Convenzioni di coerenza
 
 | Tema | Regola |
 | --- | --- |
 | ID | Identificativi opachi stabili per percorso, piano, campione, briefing, snapshot e operazione; un campione conserva il proprio ID attraverso richiesta/risposta. |
-| Errori | Repository espongono errori tipizzati: non disponibile, fuori orizzonte, quota esaurita, dati parziali o non confrontabili; UI li traduce senza cancellare dati salvati. |
+| Errori | Repository espongono errori tipizzati: non disponibile, fuori orizzonte, quota esaurita, copertura parziale insufficiente, piano obsoleto, dati non confrontabili; UI li traduce senza cancellare dati salvati. |
 | Dati | Coordinate WGS84, distanza metri, quota metri opzionale, temperatura °C, vento m/s, precipitazione mm con intervallo, tempi UTC ISO-8601 sul wire; fuso IANA solo nel client. |
-| Offline | Repository locale è fonte di verità dei briefing salvati; mappe e previsioni non salvate sono dichiarate indisponibili. |
-| Privacy | Log e diagnostica applicativi escludono GPX, coordinate, nomi di percorso, contatti e identità; cancellazione rimuove file e riferimenti del percorso. Le richieste rete possono rivelare IP e area della mappa ai fornitori: verificare termini, minimizzazione e informativa prima dell'attivazione; definire esplicitamente la policy di backup Android e provarla prima del rilascio. |
+| Offline | Repository locale è fonte di verità dei briefing salvati; mappe a tile e previsioni non salvate sono dichiarate indisponibili e degradano al canvas vettoriale / route-only. |
+| Privacy e Backup | Log e diagnostica applicativi escludono GPX, coordinate, nomi di percorso, contatti e identità; cancellazione rimuove file e riferimenti del percorso. Le richieste tile mappa sono opt-in con informativa su IP e area. Per l'MVP Android `android:allowBackup="false"` con `data_extraction_rules.xml` / `backup_rules.xml` che escludono file GPX, DB Room e DataStore da backup cloud e trasferimento dispositivo (piena coerenza local-first e nessuna incoerenza tra DB e quota). |
 
 ## Stack osservato nel progetto
 
@@ -95,9 +95,9 @@ flowchart LR
 | Gradle Wrapper | 8.14.8 |
 | Jetpack Compose BOM | 2025.10.00 |
 | Android compile/target | 37 |
-| Android minSdk attuale | 24 |
+| Android minSdk attuale | 26 |
 
-Il PRD richiede minSdk 26, ancora da implementare. AGP 8.13.2 ha segnalato supporto testato fino a API 36.1 nella build locale; verificare la compatibilità prima di aggiornare toolchain. Room, DataStore, mappe, client HTTP e gateway sono proposte della baseline, non implementazioni né versioni verificate nel codice.
+`minSdk` è allineato a 26 (Android 8.0) come richiesto dal PRD, abilitando `java.time` nativo. AGP 8.13.2 ha segnalato supporto testato fino a API 36.1 nella build locale; verificare la compatibilità prima di aggiornare toolchain. Room, DataStore, mappe, client HTTP e gateway sono proposte della baseline, non implementazioni né versioni verificate nel codice.
 
 ## Seed operativo
 
@@ -107,10 +107,10 @@ flowchart TB
  App --> Store[File privati e archiviazione locale]
  App -. campioni senza GPX .-> Gateway[Gateway candidato: controllo quota e cache]
  Gateway -. richiesta normalizzata .-> Meteo[Provider meteo candidato]
- App -. mappa quando disponibile .-> Maps[Provider mappa candidato]
+ App -. mappa opt-in quando disponibile .-> Maps[Provider mappa candidato]
 ```
 
-Ambienti previsti: sviluppo locale con fixture e provider simulato; CI GitHub esistente; eventuale gateway pubblico separato e disabilitato fino alla verifica di termini e costo zero. Nessun deploy è incluso. In assenza di un gateway gratuito verificato, lo sviluppo procede con dati simulati e l'app resta route-only.
+Ambienti previsti: sviluppo locale con fixture e provider simulato (`WEATHER_MODE=SIMULATED`); CI GitHub esistente; eventuale gateway pubblico separato a spesa zero rigida (`WEATHER_MODE=REAL_ZERO_COST`) disabilitato fino alla verifica documentata di Story 2.2 / 3.5. Nessun deploy è incluso. In assenza di un gateway gratuito verificato, lo sviluppo procede con dati simulati e l'app resta route-only.
 
 ## Mappa capacità → confini
 
@@ -124,8 +124,8 @@ Ambienti previsti: sviluppo locale con fixture e provider simulato; CI GitHub es
 
 ## Deferred e blocchi
 
-1. Prima dell'implementazione meteo: definire il contratto di errore e successo per ogni campione, il criterio misurabile per risposta parziale riuscita, intervalli e tolleranza matching; definire protocollo idempotente DataStore/storage e provarlo con crash, retry e richieste concorrenti.
-2. Prima di rete reale/deploy: verificare condizioni e attribuzioni dei candidati, modello di spesa zero con arresto rigido, configurazione User-Agent e limiti provider; se non verificabili, solo fixture e route-only.
-3. Prima del rilascio: strategia supporto e privacy gratuita, termini e responsabilità, formato e recupero cancellazione dei dati, accessibilità, prestazioni e distribuzione senza spese. Nessun account Play a pagamento autorizzato.
-4. Prima di fissare librerie o toolchain nuove: verificare compatibilità e versioni correnti, in particolare API 37 con AGP; l'architettura non prescrive versioni di dipendenze non ancora installate.
-5. Validare ETA, parametri campionamento e soglie deterministiche con fixture reali; decidere UX e rendering assieme alla specifica UX, che prevale per i dettagli di presentazione senza cambiare gli invarianti qui definiti.
+1. **Risolto (AD-4, AD-5, AD-6, AD-7):** definiti contratto `WeatherBatchResult`, tolleranze adattive (`±45m` su `PT1H`, `±180m` su `PT6H`, orizzonte 216h), soglia successo parziale (`>= 60%` + Partenza e Quota Massima/mediana), protocollo idempotente `operationId` con `planVersion` + `Mutex`, Share Card senza sagoma 2D, `allowBackup="false"`, e opt-in tile mappa con fallback vettoriale locale.
+2. **Gate operativo Story 2.2 / 3.5 (prima di rete reale/deploy):** eseguire e documentare la verifica puntuale di termini, attribuzioni, `User-Agent` e hard-stop senza billing per MET Norway, OpenFreeMap e gateway candidato prima di abilitare `WEATHER_MODE=REAL_ZERO_COST`; finché non completata, l'app opera con fixture (`SIMULATED`) e modalità route-only.
+3. **Prima del rilascio pubblico:** strategia supporto e privacy gratuita, testi legali/termini e responsabilità, accessibilità su dispositivi reali, prestazioni (NFR-5) e distribuzione senza spese. Nessun account Play a pagamento autorizzato.
+4. **Prima di fissare librerie o toolchain nuove:** verificare compatibilità e versioni correnti, in particolare API 37 con AGP; l'architettura non prescrive versioni di dipendenze non ancora installate.
+5. **Validazione sul campo:** calibrare ETA, parametri campionamento e soglie deterministiche con fixture/tracce reali; validare usabilità UX con utenti reali mantenendo invariati i vincoli qui definiti.
