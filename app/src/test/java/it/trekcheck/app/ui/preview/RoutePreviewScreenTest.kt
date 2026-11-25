@@ -147,10 +147,12 @@ class RoutePreviewScreenTest {
     }
 
     @Test
-    fun configureCtaIsDisabledAndActionsMeetTouchTargetsAndEmitEvents() {
+    fun configureCtaAndActionsAreEnabledMeetTouchTargetsAndEmitEvents() {
         val events = mutableListOf<RoutePreviewEvent>()
         show(ready(details(true)), events)
-        composeTestRule.onNodeWithTag("route_preview_configure").performScrollTo().assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("route_preview_configure").performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         composeTestRule.onNodeWithTag("route_preview_back").performScrollTo()
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
         composeTestRule.onNodeWithTag("route_preview_rename").performScrollTo()
@@ -158,7 +160,12 @@ class RoutePreviewScreenTest {
         composeTestRule.onNodeWithTag("route_preview_delete").performScrollTo()
             .assertHeightIsAtLeast(48.dp).performClick()
         assertEquals(
-            listOf(RoutePreviewEvent.BackClicked, RoutePreviewEvent.RenameClicked, RoutePreviewEvent.DeleteClicked),
+            listOf(
+                RoutePreviewEvent.ConfigureClicked,
+                RoutePreviewEvent.BackClicked,
+                RoutePreviewEvent.RenameClicked,
+                RoutePreviewEvent.DeleteClicked,
+            ),
             events,
         )
     }
@@ -257,5 +264,30 @@ class RoutePreviewScreenTest {
         composeTestRule.onNodeWithText("Monte Pizzoc").assertIsDisplayed()
         composeTestRule.onNodeWithTag("route_preview_delete").performScrollTo().assertHeightIsAtLeast(48.dp)
         assertFalse(composeTestRule.onAllNodesWithTag("elevation_profile_canvas").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun configuredDepartureShowsRouteTimezoneDifferencePaceAndEditCta() {
+        val configured = details(true).copy(
+            departureInstantUtc = java.time.Instant.parse("2026-07-15T12:00:00Z"),
+            routeZoneId = java.time.ZoneId.of("America/New_York"),
+            paceProfile = it.trekcheck.app.domain.model.PaceProfile(
+                it.trekcheck.app.domain.model.PaceProfileType.CUSTOM,
+                it.trekcheck.app.domain.model.PaceProfile.kmhToMps(4.5),
+            ),
+        )
+        composeTestRule.setContent {
+            TrekCheckTheme {
+                RoutePreviewScreen(
+                    uiState = ready(configured),
+                    onEvent = {},
+                    deviceZoneId = java.time.ZoneId.of("Europe/Rome"),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("15 lug 2026 · 08:00 (America/New_York, UTC-04:00)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("America/New_York (diverso dal telefono: Europe/Rome)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Personalizzato (4,5 km/h)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Modifica configurazione").performScrollTo().assertIsDisplayed()
     }
 }

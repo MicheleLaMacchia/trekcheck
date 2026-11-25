@@ -41,6 +41,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import it.trekcheck.app.R
+import it.trekcheck.app.domain.model.PaceProfile
+import it.trekcheck.app.domain.model.PaceProfileType
+import it.trekcheck.app.domain.model.PaceSpeedParser
 import it.trekcheck.app.domain.model.RouteManagementErrorCode
 import it.trekcheck.app.domain.model.RoutePreviewDetails
 import it.trekcheck.app.domain.model.RouteTitleSanitizer
@@ -50,6 +53,7 @@ import it.trekcheck.app.ui.components.TrekCheckPrimaryAction
 import it.trekcheck.app.ui.home.DistanceDisplay
 import it.trekcheck.app.ui.home.HomeFormatters
 import it.trekcheck.app.ui.theme.TrekCheckTheme
+import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -58,6 +62,7 @@ fun RoutePreviewScreen(
     uiState: RoutePreviewUiState,
     onEvent: (RoutePreviewEvent) -> Unit,
     modifier: Modifier = Modifier,
+    deviceZoneId: ZoneId = ZoneId.systemDefault(),
 ) {
     val spacing = TrekCheckTheme.spacing
     val locale = activeLocale()
@@ -123,7 +128,13 @@ fun RoutePreviewScreen(
                     )
 
                     RoutePreviewStatus.READY -> uiState.details?.let { details ->
-                        ReadySection(details = details, uiState = uiState, locale = locale, onEvent = onEvent)
+                        ReadySection(
+                            details = details,
+                            uiState = uiState,
+                            locale = locale,
+                            deviceZoneId = deviceZoneId,
+                            onEvent = onEvent,
+                        )
                     }
                 }
             }
@@ -292,6 +303,7 @@ private fun ReadySection(
     details: RoutePreviewDetails,
     uiState: RoutePreviewUiState,
     locale: Locale,
+    deviceZoneId: ZoneId,
     onEvent: (RoutePreviewEvent) -> Unit,
 ) {
     val spacing = TrekCheckTheme.spacing
@@ -312,7 +324,7 @@ private fun ReadySection(
         modifier = Modifier.testTag("route_preview_offline_note"),
     )
 
-    SummaryCard(details = details, locale = locale)
+    SummaryCard(details = details, locale = locale, deviceZoneId = deviceZoneId)
 
     if (!details.hasElevation) {
         NoticeSurface(
@@ -377,16 +389,30 @@ private fun ReadySection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(spacing.space2)) {
+        val canConfigure = !uiState.isDeleting && uiState.renameDialog?.isSaving != true
+        val isConfigured = details.departureInstantUtc != null
         TrekCheckPrimaryAction(
-            label = stringResource(R.string.preview_action_configure),
-            state = PrimaryActionState.Disabled,
-            onClick = {},
+            label = stringResource(
+                if (isConfigured) {
+                    R.string.preview_action_configure_edit
+                } else {
+                    R.string.preview_action_configure
+                },
+            ),
+            state = if (canConfigure) PrimaryActionState.Enabled else PrimaryActionState.Disabled,
+            onClick = { onEvent(RoutePreviewEvent.ConfigureClicked) },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("route_preview_configure"),
         )
         Text(
-            text = stringResource(R.string.preview_action_configure_hint),
+            text = stringResource(
+                if (isConfigured) {
+                    R.string.preview_action_configure_saved_hint
+                } else {
+                    R.string.preview_action_configure_hint
+                },
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -429,7 +455,11 @@ private fun SectionHeading(text: String) {
 }
 
 @Composable
-private fun SummaryCard(details: RoutePreviewDetails, locale: Locale) {
+private fun SummaryCard(
+    details: RoutePreviewDetails,
+    locale: Locale,
+    deviceZoneId: ZoneId,
+) {
     val spacing = TrekCheckTheme.spacing
     Surface(
         modifier = Modifier
@@ -473,6 +503,50 @@ private fun SummaryCard(details: RoutePreviewDetails, locale: Locale) {
                     stringResource(R.string.preview_loss_format, clampMeterLong(loss)),
                 )
             }
+            val departure = details.departureInstantUtc
+            if (departure != null) {
+                MetricRow(
+                    stringResource(R.string.preview_metric_departure),
+                    HomeFormatters.formatZonedDateTimeWithOffset(departure, details.routeZoneId, locale),
+                )
+                val timezoneValue = if (details.routeZoneId != deviceZoneId) {
+                    stringResource(
+                        R.string.preview_timezone_diff_format,
+                        details.routeZoneId.id,
+                        deviceZoneId.id,
+                    )
+                } else {
+                    details.routeZoneId.id
+                }
+                MetricRow(stringResource(R.string.preview_metric_timezone), timezoneValue)
+                MetricRow(
+                    stringResource(R.string.preview_metric_pace),
+                    paceProfileLabel(details.paceProfile, locale),
+                )
+            } else {
+                MetricRow(
+                    stringResource(R.string.preview_metric_departure),
+                    stringResource(R.string.preview_metric_departure_unconfigured),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun paceProfileLabel(paceProfile: PaceProfile, locale: Locale): String = when (paceProfile.type) {
+    PaceProfileType.RELAXED -> stringResource(R.string.pace_profile_relaxed_title)
+    PaceProfileType.NORMAL -> stringResource(R.string.pace_profile_normal_title)
+    PaceProfileType.FAST -> stringResource(R.string.pace_profile_fast_title)
+    PaceProfileType.CUSTOM -> {
+        val speed = paceProfile.customFlatSpeedMetersPerSecond
+        if (speed != null) {
+            stringResource(
+                R.string.pace_profile_custom_value_format,
+                PaceSpeedParser.formatCustomKmh(speed, locale),
+            )
+        } else {
+            stringResource(R.string.pace_profile_custom_title)
         }
     }
 }

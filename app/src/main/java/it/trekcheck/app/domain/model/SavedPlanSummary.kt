@@ -20,6 +20,7 @@ data class SavedPlanSummary(
     val dataAvailability: SavedPlanDataAvailability = SavedPlanDataAvailability.ROUTE_ONLY,
     val hasElevation: Boolean = elevationGainMeters != null,
     val hasTimestamps: Boolean = false,
+    val paceProfile: PaceProfile = PaceProfile(PaceProfileType.NORMAL),
 ) {
     init {
         require(id.isNotBlank()) { "Plan id must not be blank" }

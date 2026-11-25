@@ -20,6 +20,26 @@ interface RouteMetadataDao {
     )
     suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int
 
+    @Query(
+        "UPDATE route_metadata SET " +
+            "departureInstantUtcEpochMillis = :departureInstantUtcEpochMillis, " +
+            "routeZoneId = :routeZoneId, " +
+            "paceProfileType = :paceProfileType, " +
+            "customFlatSpeedMps = :customFlatSpeedMps, " +
+            "estimatedDurationSeconds = NULL, " +
+            "updatedAtUtcEpochMillis = :updatedAtUtcEpochMillis, " +
+            "planVersion = planVersion + 1 " +
+            "WHERE id = :id",
+    )
+    suspend fun updatePlanConfig(
+        id: String,
+        departureInstantUtcEpochMillis: Long,
+        routeZoneId: String,
+        paceProfileType: String,
+        customFlatSpeedMps: Double?,
+        updatedAtUtcEpochMillis: Long,
+    ): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: RouteMetadataEntity)
 

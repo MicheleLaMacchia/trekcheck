@@ -1,13 +1,17 @@
 package it.trekcheck.app.data.local.db
 
+import it.trekcheck.app.domain.model.PaceProfile
 import it.trekcheck.app.domain.model.RouteMetadataSnapshot
+import it.trekcheck.app.domain.model.RoutePlanConfig
 import it.trekcheck.app.domain.model.SavedPlanSummary
 import it.trekcheck.app.domain.repository.ImportedRouteRecord
 import it.trekcheck.app.domain.repository.LocalPlanRepository
 import it.trekcheck.app.domain.repository.RouteFileStorage
 import it.trekcheck.app.domain.repository.RouteImportRepository
 import it.trekcheck.app.domain.repository.RouteManagementRepository
+import it.trekcheck.app.domain.repository.RoutePlanConfigRepository
 import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +21,7 @@ import kotlinx.coroutines.withContext
 class RoomLocalPlanRepository(
     private val routeMetadataDao: RouteMetadataDao,
     private val routeFileStorage: RouteFileStorage,
-) : LocalPlanRepository, RouteImportRepository, RouteManagementRepository {
+) : LocalPlanRepository, RouteImportRepository, RouteManagementRepository, RoutePlanConfigRepository {
 
     override fun observeSavedPlans(): Flow<List<SavedPlanSummary>> =
         routeMetadataDao.observeAll().map { entities ->
@@ -41,16 +45,7 @@ class RoomLocalPlanRepository(
     }
 
     override suspend fun getRouteMetadata(routeId: String): RouteMetadataSnapshot? =
-        routeMetadataDao.getById(routeId)?.let { entity ->
-            RouteMetadataSnapshot(
-                routeId = entity.id,
-                title = entity.title,
-                hasElevation = entity.hasElevation,
-                elevationGainMeters = entity.elevationGainMeters,
-                elevationLossMeters = entity.elevationLossMeters,
-                planVersion = entity.planVersion,
-            )
-        }
+        routeMetadataDao.getById(routeId)?.toRouteMetadataSnapshot()
 
     override suspend fun updateTitle(routeId: String, title: String, updatedAtUtc: Instant): Boolean =
         routeMetadataDao.updateTitle(routeId, title, updatedAtUtc.toEpochMilli()) > 0
@@ -61,6 +56,24 @@ class RoomLocalPlanRepository(
             routeFileStorage.deleteRoute(routeId)
         }
     }
+
+    override suspend fun getPlanConfig(routeId: String): RoutePlanConfig? =
+        routeMetadataDao.getById(routeId)?.toRoutePlanConfig()
+
+    override suspend fun savePlanConfig(
+        routeId: String,
+        departureInstantUtc: Instant,
+        routeZoneId: ZoneId,
+        paceProfile: PaceProfile,
+        updatedAtUtc: Instant,
+    ): Boolean = routeMetadataDao.updatePlanConfig(
+        id = routeId,
+        departureInstantUtcEpochMillis = departureInstantUtc.toEpochMilli(),
+        routeZoneId = routeZoneId.id,
+        paceProfileType = paceProfile.type.name,
+        customFlatSpeedMps = paceProfile.customFlatSpeedMetersPerSecond,
+        updatedAtUtcEpochMillis = updatedAtUtc.toEpochMilli(),
+    ) > 0
 
     private suspend fun cleanupFilesSafely(routeId: String) {
         withContext(NonCancellable) {
@@ -106,6 +119,8 @@ class RoomLocalPlanRepository(
             geometryVersion = storedFiles.geometryVersion,
             gpxByteCount = storedFiles.gpxByteCount,
             planVersion = 1L,
+            paceProfileType = summary.paceProfile.type.name,
+            customFlatSpeedMps = summary.paceProfile.customFlatSpeedMetersPerSecond,
         )
     }
 }

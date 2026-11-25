@@ -5,6 +5,7 @@ import java.time.ZoneId
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeFormattersTest {
@@ -74,5 +75,29 @@ class HomeFormattersTest {
 
         assertEquals("25 giu · 00:30 (Europe/Rome)", romeFormatted)
         assertEquals("24 Jun · 18:30 (America/New_York)", newYorkFormatted)
+    }
+
+    @Test
+    fun formatsUtcOffsetsLocalDateLocalTimeAndZonedDateTimeWithOffset() {
+        assertEquals("UTC", HomeFormatters.formatUtcOffset(java.time.ZoneOffset.UTC))
+        assertEquals("UTC+02:00", HomeFormatters.formatUtcOffset(java.time.ZoneOffset.ofHours(2)))
+        assertEquals("UTC-05:00", HomeFormatters.formatUtcOffset(java.time.ZoneOffset.ofHours(-5)))
+
+        assertEquals(
+            "08:05",
+            HomeFormatters.formatLocalTime(java.time.LocalTime.of(8, 5), Locale.ITALIAN),
+        )
+        assertEquals(
+            "26 nov 2026 · 08:00 (Europe/Rome, UTC+01:00)",
+            HomeFormatters.formatZonedDateTimeWithOffset(
+                Instant.parse("2026-11-26T07:00:00Z"),
+                ZoneId.of("Europe/Rome"),
+                Locale.ITALIAN,
+            ),
+        )
+        assertTrue(
+            HomeFormatters.formatLocalDate(java.time.LocalDate.of(2026, 11, 26), Locale.ITALIAN)
+                .contains("26"),
+        )
     }
 }

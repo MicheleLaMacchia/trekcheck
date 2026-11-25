@@ -59,6 +59,23 @@ class RoutePreviewViewModel(
                 }
             }
 
+            RoutePreviewEvent.RefreshRequested -> {
+                val state = _uiState.value
+                if (!state.isDeleting && state.renameDialog?.isSaving != true) {
+                    load()
+                }
+            }
+
+            RoutePreviewEvent.ConfigureClicked -> {
+                val state = _uiState.value
+                if (state.status == RoutePreviewStatus.READY &&
+                    !state.isDeleting &&
+                    state.renameDialog?.isSaving != true
+                ) {
+                    _effects.trySend(RoutePreviewEffect.NavigateToPlanConfig(routeId))
+                }
+            }
+
             RoutePreviewEvent.RenameClicked -> {
                 val state = _uiState.value
                 if (state.isDeleting) return

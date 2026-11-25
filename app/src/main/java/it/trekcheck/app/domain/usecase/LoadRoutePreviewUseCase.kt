@@ -63,6 +63,9 @@ class LoadRoutePreviewUseCase(
                     segmentCount = geometry.segmentCount,
                     track = track,
                     profile = profile,
+                    departureInstantUtc = metadata.departureInstantUtc,
+                    routeZoneId = metadata.routeZoneId,
+                    paceProfile = metadata.paceProfile,
                 ),
             )
         } catch (cancellation: CancellationException) {

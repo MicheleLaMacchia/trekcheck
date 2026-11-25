@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasScrollToKeyAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -61,19 +62,22 @@ class MainActivityRoutePreviewTest {
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(cleanStateRule).around(composeTestRule)
 
-    private fun importRoute(name: String) {
+    private fun importRoute(name: String, withHistoricalTimestamps: Boolean = false) {
         composeTestRule.onNodeWithText("Importa GPX").performScrollTo().performClick()
         val activityShadow = shadowOf(composeTestRule.activity)
         val launch = activityShadow.nextStartedActivityForResult
+        val timeTag1 = if (withHistoricalTimestamps) "<time>2020-05-01T05:00:00Z</time>" else ""
+        val timeTag2 = if (withHistoricalTimestamps) "<time>2020-05-01T06:00:00Z</time>" else ""
+        val timeTag3 = if (withHistoricalTimestamps) "<time>2020-05-01T07:00:00Z</time>" else ""
         val file = File(tempDir, "route.gpx").apply {
             writeText(
                 """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
                   <trk><name>$name</name><trkseg>
-                    <trkpt lat="46.0000" lon="12.0000"><ele>900.0</ele></trkpt>
-                    <trkpt lat="46.0050" lon="12.0030"><ele>1100.0</ele></trkpt>
-                    <trkpt lat="46.0100" lon="12.0000"><ele>1000.0</ele></trkpt>
+                    <trkpt lat="46.0000" lon="12.0000"><ele>900.0</ele>$timeTag1</trkpt>
+                    <trkpt lat="46.0050" lon="12.0030"><ele>1100.0</ele>$timeTag2</trkpt>
+                    <trkpt lat="46.0100" lon="12.0000"><ele>1000.0</ele>$timeTag3</trkpt>
                   </trkseg></trk>
                 </gpx>
                 """.trimIndent(),
@@ -159,5 +163,62 @@ class MainActivityRoutePreviewTest {
             composeTestRule.onAllNodesWithText("Nessun percorso salvato").fetchSemanticsNodes().isNotEmpty()
         }
         assertFalse(routesRoot.walkTopDown().any { it.name == "geometry_v1.bin" || it.name == "source_v1.gpx" })
+    }
+
+    @Test
+    fun configuresPlanIgnoresGpxTimestampsSurvivesRecreateAndRefreshesPreviewAndHome() {
+        importRoute("Anello Storico", withHistoricalTimestamps = true)
+        composeTestRule.onNodeWithText("Apri anteprima").performScrollTo().performClick()
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("Riepilogo").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("route_preview_configure").performScrollTo().performClick()
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("Configura uscita").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Historical GPX timestamps must be explicitly ignored
+        composeTestRule.onNodeWithTag("plan_config_gpx_timestamps_notice").assertIsDisplayed()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("2020", substring = true).fetchSemanticsNodes().isEmpty(),
+        )
+
+        // Change timezone to America/New_York
+        composeTestRule.onNodeWithTag("plan_config_timezone_button").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("plan_config_timezone_search").performTextReplacement("New_York")
+        composeTestRule.onNodeWithTag("plan_config_timezone_item_America/New_York").performClick()
+
+        // Choose CUSTOM pace and test validation + valid entry
+        composeTestRule.onNodeWithTag("plan_config_pace_CUSTOM").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("plan_config_custom_speed_field").performScrollTo().performTextReplacement("4,5")
+
+        // Survives recreate before saving
+        composeTestRule.activityRule.scenario.recreate()
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("Configura uscita").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("plan_config_timezone_active")
+            .performScrollTo()
+            .assertTextContains("America/New_York", substring = true)
+
+        // Save configuration and verify RoutePreview updates
+        composeTestRule.onNodeWithTag("plan_config_save").performScrollTo().performClick()
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("Modifica configurazione").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Personalizzato (4,5 km/h)").performScrollTo().assertIsDisplayed()
+        assertTrue(
+            composeTestRule.onAllNodesWithText("America/New_York", substring = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty(),
+        )
+
+        // Back to Home and verify card updated too
+        composeTestRule.runOnUiThread { composeTestRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeTestRule.waitUntil(5_000) {
+            composeTestRule.onAllNodesWithText("Percorsi locali").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNode(hasScrollToKeyAction()).performScrollToNode(hasText("Anello Storico"))
+        composeTestRule.onNodeWithText("Passo: Personalizzato (4,5 km/h)").assertIsDisplayed()
     }
 }

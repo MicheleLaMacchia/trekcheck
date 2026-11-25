@@ -1,7 +1,10 @@
 package it.trekcheck.app.ui.home
 
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -69,4 +72,33 @@ internal object HomeFormatters {
         val formatter = DateTimeFormatter.ofPattern("d MMM · HH:mm", locale)
         return "${zoned.format(formatter)} (${zoneId.id})"
     }
+
+    fun formatZonedDateTimeWithOffset(
+        instantUtc: Instant,
+        zoneId: ZoneId,
+        locale: Locale = Locale.getDefault(),
+    ): String {
+        val zoned = ZonedDateTime.ofInstant(instantUtc, zoneId)
+        val formatter = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", locale)
+        return "${zoned.format(formatter)} (${zoneId.id}, ${formatUtcOffset(zoned.offset)})"
+    }
+
+    fun formatLocalDate(
+        date: LocalDate,
+        locale: Locale = Locale.getDefault(),
+    ): String {
+        val formatter = DateTimeFormatter.ofPattern("EEE d MMM yyyy", locale)
+        return date.format(formatter)
+    }
+
+    fun formatLocalTime(
+        time: LocalTime,
+        locale: Locale = Locale.getDefault(),
+    ): String {
+        val formatter = DateTimeFormatter.ofPattern("HH:mm", locale)
+        return time.format(formatter)
+    }
+
+    fun formatUtcOffset(offset: ZoneOffset): String =
+        if (offset == ZoneOffset.UTC) "UTC" else "UTC${offset.id}"
 }
