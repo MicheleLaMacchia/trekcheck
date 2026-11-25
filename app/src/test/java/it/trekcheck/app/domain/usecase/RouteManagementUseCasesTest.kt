@@ -193,4 +193,26 @@ class RouteManagementUseCasesTest {
         assertTrue(DeleteRouteUseCase(repo, Dispatchers.Unconfined)("r1") is RouteActionResult.Success)
         assertNull(repo.getRouteMetadata("r1"))
     }
+
+    @Test
+    fun loadPreviewPropagatesConfiguredDepartureZoneAndPaceProfile() = runBlocking {
+        val storage = VersionedRouteFileStorage(tempFolder.newFolder("routes"))
+        storeRoute(storage, "r1", geometry(true))
+        val departure = Instant.parse("2026-07-01T06:30:00Z")
+        val pace = it.trekcheck.app.domain.model.PaceProfile(
+            it.trekcheck.app.domain.model.PaceProfileType.CUSTOM,
+            it.trekcheck.app.domain.model.PaceProfile.kmhToMps(3.8),
+        )
+        val configuredPlan = plan("r1", "Sentiero configurato", true, 190.0).copy(
+            departureInstantUtc = departure,
+            routeZoneId = ZoneId.of("America/New_York"),
+            paceProfile = pace,
+        )
+        val repo = InMemoryLocalPlanRepository(listOf(configuredPlan))
+        val details = (LoadRoutePreviewUseCase(repo, storage, Dispatchers.Unconfined)("r1") as RoutePreviewResult.Success).details
+
+        assertEquals(departure, details.departureInstantUtc)
+        assertEquals(ZoneId.of("America/New_York"), details.routeZoneId)
+        assertEquals(pace, details.paceProfile)
+    }
 }

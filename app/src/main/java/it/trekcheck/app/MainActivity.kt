@@ -28,13 +28,19 @@ import it.trekcheck.app.data.local.files.VersionedRouteFileStorage
 import it.trekcheck.app.domain.repository.GpxInputSource
 import it.trekcheck.app.domain.usecase.DeleteRouteUseCase
 import it.trekcheck.app.domain.usecase.ImportGpxUseCase
+import it.trekcheck.app.domain.usecase.LoadRoutePlanConfigUseCase
 import it.trekcheck.app.domain.usecase.LoadRoutePreviewUseCase
 import it.trekcheck.app.domain.usecase.RenameRouteUseCase
+import it.trekcheck.app.domain.usecase.SaveRoutePlanConfigUseCase
 import it.trekcheck.app.ui.home.HomeEffect
 import it.trekcheck.app.ui.home.HomeEvent
 import it.trekcheck.app.ui.home.HomeScreen
 import it.trekcheck.app.ui.home.HomeUiState
 import it.trekcheck.app.ui.home.HomeViewModel
+import it.trekcheck.app.ui.planconfig.PlanConfigEffect
+import it.trekcheck.app.ui.planconfig.PlanConfigEvent
+import it.trekcheck.app.ui.planconfig.PlanConfigScreen
+import it.trekcheck.app.ui.planconfig.PlanConfigViewModel
 import it.trekcheck.app.ui.preview.RoutePreviewEffect
 import it.trekcheck.app.ui.preview.RoutePreviewEvent
 import it.trekcheck.app.ui.preview.RoutePreviewScreen
@@ -47,6 +53,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var homeViewModel: HomeViewModel
     private var isGpxPickerLaunchInFlight = false
     private var selectedRouteId by mutableStateOf<String?>(null)
+    private var configuringRouteId by mutableStateOf<String?>(null)
 
     private val openGpxDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -67,6 +74,7 @@ class MainActivity : ComponentActivity() {
         )[HomeViewModelHolder::class.java]
         homeViewModel = holder.homeViewModel
         selectedRouteId = savedInstanceState?.getString(STATE_SELECTED_ROUTE_ID)
+        configuringRouteId = savedInstanceState?.getString(STATE_CONFIGURING_ROUTE_ID)
 
         if (savedInstanceState == null) {
             handleIncomingIntent(intent)
@@ -87,12 +95,29 @@ class MainActivity : ComponentActivity() {
                 uiState = uiState,
                 onEvent = homeViewModel::onEvent,
                 selectedRouteId = selectedRouteId,
+                configuringRouteId = configuringRouteId,
                 routePreviewContent = { routeId ->
                     RoutePreviewHost(
                         viewModel = holder.getOrCreatePreviewViewModel(routeId),
+                        onOpenConfig = { targetRouteId -> openPlanConfig(holder, targetRouteId) },
                         onClose = {
+                            holder.releasePlanConfigViewModel(routeId)
                             holder.releasePreviewViewModel(routeId)
+                            configuringRouteId = null
                             selectedRouteId = null
+                        },
+                    )
+                },
+                planConfigContent = { routeId ->
+                    PlanConfigHost(
+                        viewModel = holder.getOrCreatePlanConfigViewModel(routeId),
+                        onClose = { saved ->
+                            holder.releasePlanConfigViewModel(routeId)
+                            configuringRouteId = null
+                            if (saved) {
+                                holder.getPreviewViewModelIfActive(routeId)
+                                    ?.onEvent(RoutePreviewEvent.RefreshRequested)
+                            }
                         },
                     )
                 },
@@ -101,6 +126,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openRoutePreview(holder: HomeViewModelHolder, routeId: String) {
+        val currentConfig = configuringRouteId
+        if (currentConfig != null) {
+            holder.releasePlanConfigViewModel(currentConfig)
+            configuringRouteId = null
+        }
         val current = selectedRouteId
         if (current != null && current != routeId) {
             holder.releasePreviewViewModel(current)
@@ -108,9 +138,18 @@ class MainActivity : ComponentActivity() {
         selectedRouteId = routeId
     }
 
+    private fun openPlanConfig(holder: HomeViewModelHolder, routeId: String) {
+        val currentConfig = configuringRouteId
+        if (currentConfig != null && currentConfig != routeId) {
+            holder.releasePlanConfigViewModel(currentConfig)
+        }
+        configuringRouteId = routeId
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         selectedRouteId?.let { outState.putString(STATE_SELECTED_ROUTE_ID, it) }
+        configuringRouteId?.let { outState.putString(STATE_CONFIGURING_ROUTE_ID, it) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -136,8 +175,13 @@ class MainActivity : ComponentActivity() {
         val action = incomingIntent.action ?: return
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return
 
+        val holder = ViewModelProvider(this)[HomeViewModelHolder::class.java]
+        configuringRouteId?.let { activeConfigId ->
+            holder.releasePlanConfigViewModel(activeConfigId)
+            configuringRouteId = null
+        }
         selectedRouteId?.let { activeId ->
-            ViewModelProvider(this)[HomeViewModelHolder::class.java].releasePreviewViewModel(activeId)
+            holder.releasePreviewViewModel(activeId)
             selectedRouteId = null
         }
         val uri = extractGpxUri(incomingIntent)
@@ -156,20 +200,34 @@ class MainActivity : ComponentActivity() {
         private val database: TrekCheckDatabase,
         val homeViewModel: HomeViewModel,
         private val routePreviewViewModelFactory: (String) -> RoutePreviewViewModel,
+        private val planConfigViewModelFactory: (String) -> PlanConfigViewModel,
     ) : ViewModel() {
         private val activePreviewModels = mutableMapOf<String, RoutePreviewViewModel>()
+        private val activePlanConfigModels = mutableMapOf<String, PlanConfigViewModel>()
 
         fun getOrCreatePreviewViewModel(routeId: String): RoutePreviewViewModel =
             activePreviewModels.getOrPut(routeId) { routePreviewViewModelFactory(routeId) }
+
+        fun getPreviewViewModelIfActive(routeId: String): RoutePreviewViewModel? =
+            activePreviewModels[routeId]
 
         fun releasePreviewViewModel(routeId: String) {
             activePreviewModels.remove(routeId)?.clear()
         }
 
+        fun getOrCreatePlanConfigViewModel(routeId: String): PlanConfigViewModel =
+            activePlanConfigModels.getOrPut(routeId) { planConfigViewModelFactory(routeId) }
+
+        fun releasePlanConfigViewModel(routeId: String) {
+            activePlanConfigModels.remove(routeId)?.clear()
+        }
+
         override fun onCleared() {
             val previewModels = activePreviewModels.values.toList()
+            val configModels = activePlanConfigModels.values.toList()
             activePreviewModels.clear()
-            var remaining = 1 + previewModels.size
+            activePlanConfigModels.clear()
+            var remaining = 1 + previewModels.size + configModels.size
             val onScopeDone = {
                 remaining -= 1
                 if (remaining == 0) {
@@ -179,6 +237,10 @@ class MainActivity : ComponentActivity() {
             homeViewModel.invokeOnScopeCompletion(onScopeDone)
             homeViewModel.clear()
             previewModels.forEach { vm ->
+                vm.invokeOnScopeCompletion(onScopeDone)
+                vm.clear()
+            }
+            configModels.forEach { vm ->
                 vm.invokeOnScopeCompletion(onScopeDone)
                 vm.clear()
             }
@@ -210,6 +272,8 @@ class MainActivity : ComponentActivity() {
             )
             val renameRouteUseCase = RenameRouteUseCase(routeManagementRepository = repository)
             val deleteRouteUseCase = DeleteRouteUseCase(routeManagementRepository = repository)
+            val loadPlanConfigUseCase = LoadRoutePlanConfigUseCase(routePlanConfigRepository = repository)
+            val savePlanConfigUseCase = SaveRoutePlanConfigUseCase(routePlanConfigRepository = repository)
             val viewModel = HomeViewModel(
                 localPlanRepository = repository,
                 importGpxUseCase = importGpxUseCase,
@@ -225,6 +289,13 @@ class MainActivity : ComponentActivity() {
                         deleteRoute = deleteRouteUseCase,
                     )
                 },
+                planConfigViewModelFactory = { routeId ->
+                    PlanConfigViewModel(
+                        routeId = routeId,
+                        loadPlanConfig = loadPlanConfigUseCase,
+                        savePlanConfig = savePlanConfigUseCase,
+                    )
+                },
             ) as T
         }
     }
@@ -237,6 +308,7 @@ class MainActivity : ComponentActivity() {
 
     internal companion object {
         private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
+        private const val STATE_CONFIGURING_ROUTE_ID = "configuring_route_id"
 
         val GPX_PICKER_MIME_TYPES = arrayOf(
             "application/gpx+xml",
@@ -279,10 +351,14 @@ fun TrekCheckApp(
     uiState: HomeUiState = HomeUiState(),
     onEvent: (HomeEvent) -> Unit = {},
     selectedRouteId: String? = null,
+    configuringRouteId: String? = null,
     routePreviewContent: @Composable (String) -> Unit = {},
+    planConfigContent: @Composable (String) -> Unit = {},
 ) {
     TrekCheckTheme {
-        if (selectedRouteId != null) {
+        if (configuringRouteId != null) {
+            planConfigContent(configuringRouteId)
+        } else if (selectedRouteId != null) {
             routePreviewContent(selectedRouteId)
         } else {
             HomeScreen(
@@ -296,16 +372,36 @@ fun TrekCheckApp(
 @Composable
 private fun RoutePreviewHost(
     viewModel: RoutePreviewViewModel,
+    onOpenConfig: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 RoutePreviewEffect.NavigateHome -> onClose()
+                is RoutePreviewEffect.NavigateToPlanConfig -> onOpenConfig(effect.routeId)
             }
         }
     }
     BackHandler { viewModel.onEvent(RoutePreviewEvent.BackClicked) }
     val state by viewModel.uiState.collectAsState()
     RoutePreviewScreen(uiState = state, onEvent = viewModel::onEvent)
+}
+
+@Composable
+private fun PlanConfigHost(
+    viewModel: PlanConfigViewModel,
+    onClose: (saved: Boolean) -> Unit,
+) {
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                PlanConfigEffect.Cancel -> onClose(false)
+                PlanConfigEffect.SavedAndClose -> onClose(true)
+            }
+        }
+    }
+    BackHandler { viewModel.onEvent(PlanConfigEvent.BackClicked) }
+    val state by viewModel.uiState.collectAsState()
+    PlanConfigScreen(uiState = state, onEvent = viewModel::onEvent)
 }

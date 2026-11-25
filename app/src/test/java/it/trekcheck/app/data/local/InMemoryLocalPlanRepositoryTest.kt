@@ -42,4 +42,33 @@ class InMemoryLocalPlanRepositoryTest {
 
         assertEquals(listOf(samplePlan, secondPlan), repository.observeSavedPlans().first())
     }
+
+    @Test
+    fun savePlanConfigUpdatesDepartureZonePaceAndPlanVersionWithoutAffectingRename() = runBlocking {
+        val repository = InMemoryLocalPlanRepository(initialPlans = listOf(samplePlan))
+        assertEquals(1L, repository.getPlanConfig("plan-1")!!.planVersion)
+
+        val departure = Instant.parse("2026-08-01T07:00:00Z")
+        val pace = it.trekcheck.app.domain.model.PaceProfile(
+            it.trekcheck.app.domain.model.PaceProfileType.RELAXED,
+        )
+        assertTrue(
+            repository.savePlanConfig(
+                routeId = "plan-1",
+                departureInstantUtc = departure,
+                routeZoneId = ZoneId.of("UTC"),
+                paceProfile = pace,
+                updatedAtUtc = Instant.parse("2026-11-25T10:00:00Z"),
+            ),
+        )
+        val config = repository.getPlanConfig("plan-1")!!
+        assertEquals(departure, config.departureInstantUtc)
+        assertEquals(ZoneId.of("UTC"), config.routeZoneId)
+        assertEquals(pace, config.paceProfile)
+        assertEquals(2L, config.planVersion)
+        assertEquals(null, repository.observeSavedPlans().first().single().estimatedDurationSeconds)
+
+        assertTrue(repository.updateTitle("plan-1", "Nuovo nome", Instant.parse("2026-11-25T10:05:00Z")))
+        assertEquals(2L, repository.getPlanConfig("plan-1")!!.planVersion)
+    }
 }

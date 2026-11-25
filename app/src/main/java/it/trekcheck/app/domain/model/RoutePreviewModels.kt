@@ -1,5 +1,8 @@
 package it.trekcheck.app.domain.model
 
+import java.time.Instant
+import java.time.ZoneId
+
 enum class RouteManagementErrorCode {
     NOT_FOUND,
     CORRUPTED_GEOMETRY,
@@ -66,6 +69,9 @@ data class RoutePreviewDetails(
     val segmentCount: Int,
     val track: SimplifiedRoutePreview,
     val profile: ElevationProfilePreview?,
+    val departureInstantUtc: Instant? = null,
+    val routeZoneId: ZoneId = ZoneId.of("UTC"),
+    val paceProfile: PaceProfile = PaceProfile(PaceProfileType.NORMAL),
 )
 
 /** Scalar metadata of a saved route, as persisted by the metadata store. */
@@ -76,6 +82,9 @@ data class RouteMetadataSnapshot(
     val elevationGainMeters: Double?,
     val elevationLossMeters: Double?,
     val planVersion: Long,
+    val departureInstantUtc: Instant? = null,
+    val routeZoneId: ZoneId = ZoneId.of("UTC"),
+    val paceProfile: PaceProfile = PaceProfile(PaceProfileType.NORMAL),
 )
 
 sealed interface RoutePreviewResult {

@@ -216,4 +216,21 @@ class SavedPlanSummaryTest {
         assertEquals(false, withTimestampsOnly.hasElevation)
         assertEquals(true, withTimestampsOnly.hasTimestamps)
     }
+
+    @Test
+    fun defaultsAndPreservesPaceProfile() {
+        val custom = PaceProfile(PaceProfileType.CUSTOM, PaceProfile.kmhToMps(4.5))
+        val summary = SavedPlanSummary(
+            id = "plan-pace",
+            title = "Sentiero veloce",
+            distanceMeters = 5_000.0,
+            elevationGainMeters = 200.0,
+            departureInstantUtc = sampleInstant,
+            routeZoneId = sampleZone,
+            estimatedDurationSeconds = null,
+            updatedAtUtc = sampleInstant,
+            paceProfile = custom,
+        )
+        assertEquals(custom, summary.paceProfile)
+    }
 }

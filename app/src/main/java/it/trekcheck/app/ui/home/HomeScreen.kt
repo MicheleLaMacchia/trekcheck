@@ -634,6 +634,17 @@ private fun SavedPlanCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            if (plan.departureInstantUtc != null) {
+                Text(
+                    text = stringResource(
+                        R.string.home_plan_pace_format,
+                        it.trekcheck.app.ui.preview.paceProfileLabel(plan.paceProfile, activeLocale),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(spacing.space2),
                 verticalArrangement = Arrangement.spacedBy(spacing.space1),

@@ -111,6 +111,21 @@ class RoomLocalPlanRepositoryTest {
             override suspend fun getById(id: String): RouteMetadataEntity? = database.routeMetadataDao().getById(id)
             override suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int =
                 database.routeMetadataDao().updateTitle(id, title, updatedAtUtcEpochMillis)
+            override suspend fun updatePlanConfig(
+                id: String,
+                departureInstantUtcEpochMillis: Long,
+                routeZoneId: String,
+                paceProfileType: String,
+                customFlatSpeedMps: Double?,
+                updatedAtUtcEpochMillis: Long,
+            ): Int = database.routeMetadataDao().updatePlanConfig(
+                id,
+                departureInstantUtcEpochMillis,
+                routeZoneId,
+                paceProfileType,
+                customFlatSpeedMps,
+                updatedAtUtcEpochMillis,
+            )
             override suspend fun insert(entity: RouteMetadataEntity) {
                 throw IllegalStateException("Simulated SQLite constraint failure")
             }
@@ -194,6 +209,21 @@ class RoomLocalPlanRepositoryTest {
             override suspend fun getById(id: String): RouteMetadataEntity? = database.routeMetadataDao().getById(id)
             override suspend fun updateTitle(id: String, title: String, updatedAtUtcEpochMillis: Long): Int =
                 database.routeMetadataDao().updateTitle(id, title, updatedAtUtcEpochMillis)
+            override suspend fun updatePlanConfig(
+                id: String,
+                departureInstantUtcEpochMillis: Long,
+                routeZoneId: String,
+                paceProfileType: String,
+                customFlatSpeedMps: Double?,
+                updatedAtUtcEpochMillis: Long,
+            ): Int = database.routeMetadataDao().updatePlanConfig(
+                id,
+                departureInstantUtcEpochMillis,
+                routeZoneId,
+                paceProfileType,
+                customFlatSpeedMps,
+                updatedAtUtcEpochMillis,
+            )
             override suspend fun insert(entity: RouteMetadataEntity) {
                 database.routeMetadataDao().insert(entity)
                 throw CancellationException("Cancelled right after insert")
@@ -251,6 +281,111 @@ class RoomLocalPlanRepositoryTest {
         assertNull(database.routeMetadataDao().getById("route-manage"))
         assertNull(repository.getRouteMetadata("route-manage"))
         assertFalse(File(routesRoot, "route-manage").exists())
+    }
+
+    @Test
+    fun savePlanConfigPersistsValuesClearsEstimatedDurationAndIncrementsPlanVersion() = runBlocking {
+        val repository = RoomLocalPlanRepository(database.routeMetadataDao(), storage)
+        val record = createImportedRecord(
+            routeId = "route-config",
+            title = "Monte Bianco",
+            hasElevation = true,
+            hasTimestamps = true,
+            pointCount = 5,
+        ).let {
+            it.copy(
+                summary = it.summary.copy(
+                    estimatedDurationSeconds = 7_200L,
+                ),
+            )
+        }
+        repository.saveImportedRoute(record)
+        assertEquals(1L, repository.getPlanConfig("route-config")!!.planVersion)
+        assertEquals(7_200L, repository.observeSavedPlans().first().single().estimatedDurationSeconds)
+
+        val departure = Instant.parse("2026-07-20T06:00:00Z")
+        val zone = ZoneId.of("America/New_York")
+        val pace = it.trekcheck.app.domain.model.PaceProfile(
+            it.trekcheck.app.domain.model.PaceProfileType.CUSTOM,
+            it.trekcheck.app.domain.model.PaceProfile.kmhToMps(4.25),
+        )
+        val updatedAt = Instant.parse("2026-11-25T09:00:00Z")
+
+        assertTrue(repository.savePlanConfig("route-config", departure, zone, pace, updatedAt))
+        assertFalse(repository.savePlanConfig("missing", departure, zone, pace, updatedAt))
+
+        val loaded = repository.getPlanConfig("route-config")!!
+        assertEquals(departure, loaded.departureInstantUtc)
+        assertEquals(zone, loaded.routeZoneId)
+        assertEquals(pace, loaded.paceProfile)
+        assertEquals(2L, loaded.planVersion)
+
+        val summary = repository.observeSavedPlans().first().single()
+        assertEquals(departure, summary.departureInstantUtc)
+        assertEquals(zone, summary.routeZoneId)
+        assertEquals(pace, summary.paceProfile)
+        assertNull(summary.estimatedDurationSeconds)
+    }
+
+    @Test
+    fun migratesVersion1DatabaseToVersion2PreservingExistingRowsWithNormalPaceDefault() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(TrekCheckDatabase.DATABASE_NAME)
+        val dbFile = context.getDatabasePath(TrekCheckDatabase.DATABASE_NAME)
+        dbFile.parentFile?.mkdirs()
+
+        val rawDb = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+        try {
+            rawDb.execSQL(
+                "CREATE TABLE IF NOT EXISTS `route_metadata` (" +
+                    "`id` TEXT NOT NULL, `title` TEXT NOT NULL, `distanceMeters` REAL NOT NULL, " +
+                    "`elevationGainMeters` REAL, `elevationLossMeters` REAL, " +
+                    "`minElevationMeters` REAL, `maxElevationMeters` REAL, " +
+                    "`startLatitude` REAL NOT NULL, `startLongitude` REAL NOT NULL, " +
+                    "`endLatitude` REAL NOT NULL, `endLongitude` REAL NOT NULL, " +
+                    "`minLatitude` REAL NOT NULL, `maxLatitude` REAL NOT NULL, " +
+                    "`minLongitude` REAL NOT NULL, `maxLongitude` REAL NOT NULL, " +
+                    "`pointCount` INTEGER NOT NULL, `segmentCount` INTEGER NOT NULL, " +
+                    "`hasElevation` INTEGER NOT NULL, `hasTimestamps` INTEGER NOT NULL, " +
+                    "`departureInstantUtcEpochMillis` INTEGER, `routeZoneId` TEXT NOT NULL, " +
+                    "`estimatedDurationSeconds` INTEGER, `updatedAtUtcEpochMillis` INTEGER NOT NULL, " +
+                    "`dataAvailability` TEXT NOT NULL, `gpxFileName` TEXT NOT NULL, " +
+                    "`gpxVersion` INTEGER NOT NULL, `geometryFileName` TEXT NOT NULL, " +
+                    "`geometryVersion` INTEGER NOT NULL, `gpxByteCount` INTEGER NOT NULL, " +
+                    "`planVersion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            rawDb.execSQL(
+                "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY, identity_hash TEXT)",
+            )
+            rawDb.execSQL(
+                "INSERT OR REPLACE INTO room_master_table (id, identity_hash) " +
+                    "VALUES(42, '4fa7c2f9c8ac7b7a56c366d493181676')",
+            )
+            rawDb.execSQL(
+                "INSERT INTO route_metadata VALUES (" +
+                    "'legacy-1', 'Sentiero v1', 4200.0, 210.0, 120.0, 800.0, 1010.0, " +
+                    "46.0, 12.0, 46.02, 12.02, 46.0, 46.02, 12.0, 12.02, " +
+                    "25, 1, 1, 0, NULL, 'Europe/Rome', NULL, 1700000000000, 'ROUTE_ONLY', " +
+                    "'source_v1.gpx', 1, 'geometry_v1.bin', 1, 512, 1)",
+            )
+            rawDb.version = 1
+        } finally {
+            rawDb.close()
+        }
+
+        val migratedDb = TrekCheckDatabase.create(context)
+        try {
+            val repo = RoomLocalPlanRepository(migratedDb.routeMetadataDao(), storage)
+            val config = repo.getPlanConfig("legacy-1")!!
+            assertEquals("Sentiero v1", config.routeTitle)
+            assertEquals(ZoneId.of("Europe/Rome"), config.routeZoneId)
+            assertEquals(it.trekcheck.app.domain.model.PaceProfileType.NORMAL, config.paceProfile.type)
+            assertNull(config.paceProfile.customFlatSpeedMetersPerSecond)
+            assertEquals(1L, config.planVersion)
+        } finally {
+            migratedDb.close()
+            context.deleteDatabase(TrekCheckDatabase.DATABASE_NAME)
+        }
     }
 
     private suspend fun createImportedRecord(

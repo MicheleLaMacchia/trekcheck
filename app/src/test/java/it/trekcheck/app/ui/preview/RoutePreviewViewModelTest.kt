@@ -265,4 +265,24 @@ class RoutePreviewViewModelTest {
         vm.onEvent(RoutePreviewEvent.BackClicked)
         assertEquals(RoutePreviewEffect.NavigateHome, vm.effects.first())
     }
+
+    @Test
+    fun configureClickedEmitsNavigationAndRefreshRequestedReloadsUpdatedPlanConfig() = runBlocking {
+        val f = fixture()
+        val vm = f.viewModel
+        vm.onEvent(RoutePreviewEvent.ConfigureClicked)
+        assertEquals(RoutePreviewEffect.NavigateToPlanConfig("r1"), vm.effects.first())
+
+        val departure = Instant.parse("2026-08-10T06:00:00Z")
+        val pace = it.trekcheck.app.domain.model.PaceProfile(
+            it.trekcheck.app.domain.model.PaceProfileType.FAST,
+        )
+        f.repo.savePlanConfig("r1", departure, ZoneId.of("America/New_York"), pace, Instant.parse("2026-11-25T10:00:00Z"))
+        vm.onEvent(RoutePreviewEvent.RefreshRequested)
+
+        val details = vm.uiState.value.details!!
+        assertEquals(departure, details.departureInstantUtc)
+        assertEquals(ZoneId.of("America/New_York"), details.routeZoneId)
+        assertEquals(pace, details.paceProfile)
+    }
 }

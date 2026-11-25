@@ -28,6 +28,8 @@ data class RoutePreviewUiState(
 sealed interface RoutePreviewEvent {
     data object BackClicked : RoutePreviewEvent
     data object RetryClicked : RoutePreviewEvent
+    data object RefreshRequested : RoutePreviewEvent
+    data object ConfigureClicked : RoutePreviewEvent
     data object RenameClicked : RoutePreviewEvent
     data class RenameDraftChanged(val draft: String) : RoutePreviewEvent
     data object RenameConfirmed : RoutePreviewEvent
@@ -40,4 +42,5 @@ sealed interface RoutePreviewEvent {
 
 sealed interface RoutePreviewEffect {
     data object NavigateHome : RoutePreviewEffect
+    data class NavigateToPlanConfig(val routeId: String) : RoutePreviewEffect
 }
